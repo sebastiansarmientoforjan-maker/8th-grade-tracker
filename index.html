@@ -324,7 +324,7 @@
             const activityData = {
               "title": `${unitPrefix}${titleWithoutPrefix}`,
               "description": originalActivity.description,
-              "unit": original.unit,
+              "unit": originalActivity.unit,
               "date": newDate.toISOString().split('T')[0],
               "class": newClass
             };
@@ -584,28 +584,27 @@
                 </button>
             </div>
           </div>
-          <div className="flex-1 bg-white rounded-xl shadow-lg p-4 lg:p-6 overflow-x-auto">
-            {/* Calendar Header */}
-            <div className="flex justify-between items-center mb-6">
-              <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
-                Add Activity
-              </button>
-              <div className="flex items-center space-x-4">
-                <h2 className="text-xl font-bold md:text-2xl">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
-                <div className="flex space-x-2">
-                  <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-                  </button>
-                  <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="px-3 py-1 text-sm font-medium text-gray-700 rounded-full hover:bg-gray-200">
-                    Today
-                  </button>
-                  <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-                  </button>
-                </div>
+          {/* Calendar Header with Navigation and Add Button */}
+          <div className="flex justify-between items-center mb-6">
+            <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+              Add Activity
+            </button>
+            <div className="flex items-center space-x-4">
+              <h2 className="text-xl font-bold md:text-2xl">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+              <div className="flex space-x-2">
+                <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                </button>
+                <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="px-3 py-1 text-sm font-medium text-gray-700 rounded-full hover:bg-gray-200">
+                  Today
+                </button>
+                <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                </button>
               </div>
             </div>
-    
+          </div>
+          <div className="flex-1 bg-white rounded-xl shadow-lg p-4 lg:p-6 overflow-x-auto">
             {/* Main Content Area */}
             <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4">
               {/* Unscheduled Activities List */}
@@ -757,7 +756,7 @@
 
       // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
       const authorizedEmails = [
-        'ssarmiento@craighouse.cl','fmorales@craighouse.cl','imoren@craighouse.cl', 'dmunoz@craighouse.cl', 'thernandez@craighouse.cl' ,
+        'ssarmiento@craighouse.cl',
       ].map(email => email.toLowerCase().trim());
 
       React.useEffect(() => {
@@ -848,4 +847,3 @@
 
 </body>
 </html>
-

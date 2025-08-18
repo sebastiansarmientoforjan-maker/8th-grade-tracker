@@ -24,11 +24,15 @@
 
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
+    <!-- Airtable SDKs -->
+
+    <script src="https://cdn.jsdelivr.net/npm/airtable@0.11.6/lib/airtable.umd.js"></script>
+
+    <!-- Firebase SDKs -->
+
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
 
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
 
     <style>
 
@@ -42,7 +46,7 @@
 
 </head>
 
-<body class="bg-[#F8F8F8]">
+<body>
 
 
 
@@ -148,25 +152,19 @@
 
       const classColors = {
 
-        '8A1': 'bg-[#FF6B6B]', // Bright Red
+        '8A1': 'bg-red-500',
 
-        '8A2': 'bg-[#FFB347]', // Bright Orange
+        '8A2': 'bg-orange-500',
 
-        '8R1': 'bg-[#F2D735]', // A more visible yellow
+        '8R1': 'bg-yellow-500',
 
-        '8R2': 'bg-[#77DD77]', // Bright Green
+        '8R2': 'bg-green-500',
 
-        '8R3': 'bg-[#64B5F6]', // Bright Blue
+        '8R3': 'bg-blue-500',
 
-        '8R4': 'bg-[#9575CD]', // Bright Purple
+        '8R4': 'bg-indigo-500',
 
       };
-
-      
-
-      const authorizedHolidayManager = 'ssarmiento@craighouse.cl';
-
-      const isHolidayManager = user.email === authorizedHolidayManager;
 
     
 
@@ -184,21 +182,15 @@
 
       });
 
-      const [scheduledActivities, setScheduledActivities] = React.useState([]);
+      const [activities, setActivities] = React.useState([]);
 
-      const [activityTemplates, setActivityTemplates] = React.useState([]);
-
-      const [holidays, setHolidays] = React.useState([]);
+      const [unscheduledActivities, setUnscheduledActivities] = React.useState([]);
 
       const [selectedUnit, setSelectedUnit] = React.useState('All');
 
       const [selectedActivity, setSelectedActivity] = React.useState(null);
 
-      const [selectedHoliday, setSelectedHoliday] = React.useState(null);
-
-      const [isActivityModalOpen, setIsActivityModalOpen] = React.useState(false);
-
-      const [isHolidayModalOpen, setIsHolidayModalOpen] = React.useState(false);
+      const [isModalOpen, setIsModalOpen] = React.useState(false);
 
       const [draggedOverCell, setDraggedOverCell] = React.useState(null);
 
@@ -210,17 +202,33 @@
 
     
 
-      // Firestore connections
+      // Airtable credentials
 
-      const db = firebase.firestore();
+      const airtableApiKey = 'pat5F2wppyaEJmcas.16dbab5e7eea0d2c720cbaff9d2184c87674cba3e3e7c54904262edd016c0641';
 
-      const userUID = user.uid;
+      const airtableBaseId = 'app1ZWNrSqzTWUYPR';
 
-      const templatesRef = db.collection('activity_templates');
+      const airtableTableName = 'Activities';
 
-      const scheduledRef = db.collection('scheduled_activities');
+      
 
-      const holidaysRef = db.collection('holidays');
+      let base;
+
+      try {
+
+        console.log(`Intentando conectar con Airtable. Base ID: ${airtableBaseId}, API Key: ${airtableApiKey}`);
+
+        base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
+
+      } catch (e) {
+
+        setMessage(`Error al inicializar Airtable. Esto podría deberse a credenciales incorrectas. Verifique su API Key y Base ID.`);
+
+        console.error("Error initializing Airtable:", e);
+
+        if (loading) setLoading(false);
+
+      }
 
 
 
@@ -242,73 +250,81 @@
 
       };
 
-      
+    
 
       const weekdays = getWeekdays(currentWeekStart);
 
       
 
-      const fetchData = async () => {
+      const fetchActivities = async () => {
+
+        setLoading(true);
 
         try {
 
-            console.log('Fetching all data from Firestore...');
+          if (!base) {
 
-            const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot] = await Promise.all([
+            setMessage('Error de configuración: No se pudo inicializar la conexión con Airtable.');
 
-                templatesRef.get(),
+            setLoading(false);
 
-                scheduledRef.get(),
+            return;
 
-                holidaysRef.get(),
+          }
 
-            ]);
+          console.log('Fetching activities from Airtable...');
 
+          const records = await base(airtableTableName).select({
 
+            view: "Grid view"
 
-            const fetchedTemplates = templatesSnapshot.docs.map(doc => ({
+          }).all();
 
-                id: doc.id,
-
-                ...doc.data()
-
-            }));
-
-            const fetchedScheduled = scheduledSnapshot.docs.map(doc => ({
-
-                id: doc.id,
-
-                ...doc.data()
-
-            }));
-
-            const fetchedHolidays = holidaysSnapshot.docs.map(doc => ({
-
-                id: doc.id,
-
-                ...doc.data()
-
-            }));
+          console.log('Successfully fetched activities:', records.length, 'records.');
 
 
 
-            setActivityTemplates(fetchedTemplates);
+          const allActivities = records.map(record => ({
 
-            setScheduledActivities(fetchedScheduled);
+            id: record.id,
 
-            setHolidays(fetchedHolidays);
+            title: record.fields.Title,
 
-            console.log('All state updated.');
+            description: record.fields.Description,
+
+            unit: record.fields.Unit,
+
+            class: record.fields.Class,
+
+            date: record.fields.Date
+
+          }));
+
+
+
+          const scheduled = allActivities.filter(act => act.date && act.class);
+
+          const unscheduled = allActivities.filter(act => !act.date || !act.class);
+
+
+
+          setActivities(scheduled);
+
+          setUnscheduledActivities(unscheduled);
+
+          setMessage('Activities loaded successfully!');
+
+          console.log('Activities and unscheduled activities state updated.');
 
         } catch (error) {
 
-            setMessage(`Error fetching data: ${error.message}`);
+          setMessage(`Error fetching activities: ${error.message}. Asegúrese de que sus credenciales de Airtable sean correctas y que la tabla '${airtableTableName}' exista.`);
 
-            console.error("Error fetching data:", error);
+          console.error("Error fetching activities:", error);
 
         } finally {
 
-            setLoading(false);
+          setLoading(false);
 
         }
 
@@ -318,9 +334,9 @@
 
       React.useEffect(() => {
 
-        console.log('useEffect triggered for fetching data.');
+        console.log('useEffect triggered for fetching activities.');
 
-        fetchData();
+        fetchActivities();
 
       }, []);
 
@@ -340,241 +356,133 @@
 
     
 
-      const openActivityModal = (activity = null, isScheduled = false) => {
+      const openModal = (activity = null) => {
 
-        setSelectedActivity({ ...activity, isScheduled });
+        setSelectedActivity(activity);
 
-        setIsActivityModalOpen(true);
+        setIsModalOpen(true);
 
       };
 
-      const closeActivityModal = () => {
+      const closeModal = () => {
 
-        setIsActivityModalOpen(false);
+        setIsModalOpen(false);
 
         setSelectedActivity(null);
 
       };
 
-
-
-      const openHolidayModal = (holiday = null) => {
-
-        setSelectedHoliday(holiday);
-
-        setIsHolidayModalOpen(true);
-
-      };
-
-      const closeHolidayModal = () => {
-
-        setIsHolidayModalOpen(false);
-
-        setSelectedHoliday(null);
-
-      };
-
     
 
-      const handleSave = async (activityData, isScheduled) => {
+      const handleSave = async (activityData) => {
 
         try {
 
-            if (isScheduled) {
+          if (activityData.id) {
 
-                await scheduledRef.doc(activityData.id).update({
+            await base(airtableTableName).update(activityData.id, {
 
-                    "title": activityData.title,
+              "Title": activityData.title,
 
-                    "description": activityData.description,
+              "Description": activityData.description,
 
-                    "unit": activityData.unit,
+              "Unit": activityData.unit,
 
-                    "class": activityData.class,
+              "Class": activityData.class,
 
-                    "date": activityData.date,
+              "Date": activityData.date
 
-                    "templateId": activityData.templateId
+            });
 
-                });
+          } else {
 
-            } else {
+            await base(airtableTableName).create({
 
-                if (activityData.id) {
+              "Title": activityData.title,
 
-                    await templatesRef.doc(activityData.id).update({
+              "Description": activityData.description,
 
-                        "title": activityData.title,
+              "Unit": activityData.unit,
 
-                        "description": activityData.description,
+              "Class": activityData.class,
 
-                        "unit": activityData.unit
+              "Date": activityData.date
 
-                    });
+            });
 
-                } else {
+          }
 
-                    await templatesRef.add({
+          setMessage('Activity saved successfully!');
 
-                        "title": activityData.title,
-
-                        "description": activityData.description,
-
-                        "unit": activityData.unit,
-
-                        "userId": userUID // Add userId for future potential rules
-
-                    });
-
-                }
-
-            }
-
-            fetchData();
+          fetchActivities(); // Refresh data from Airtable
 
         } catch (error) {
 
-            setMessage(`Error saving activity: ${error.message}`);
+          setMessage(`Error saving activity: ${error.message}`);
 
-            console.error(error);
+          console.error(error);
 
         }
 
-        closeActivityModal();
+        closeModal();
 
       };
 
       
 
-      const handleSaveHoliday = async (holidayData) => {
+      const handleUnschedule = async (activityId) => {
 
         try {
 
-            // New logic to handle class-specific holidays
+          await base(airtableTableName).update(activityId, {
 
-            const payload = {
+            "Date": null,
 
-                "name": holidayData.name,
+            "Class": null
 
-                "startDate": holidayData.startDate,
+          });
 
-                "endDate": holidayData.endDate,
+          setMessage('Activity unscheduled successfully!');
 
-                "userId": userUID,
-
-                "appliesToAll": holidayData.appliesToAll,
-
-                "classes": holidayData.appliesToAll ? classes : holidayData.classes,
-
-            };
-
-
-
-            if (holidayData.id) {
-
-                await holidaysRef.doc(holidayData.id).update(payload);
-
-            } else {
-
-                await holidaysRef.add(payload);
-
-            }
-
-            fetchData();
+          fetchActivities();
 
         } catch (error) {
 
-            setMessage(`Error saving holiday: ${error.message}`);
+          setMessage(`Error unscheduling activity: ${error.message}`);
 
-            console.error(error);
+          console.error(error);
 
         }
 
-        closeHolidayModal();
+        closeModal();
 
-      };
-
-
-
-      const handleDeleteHoliday = async (holidayId) => {
-
-          try {
-
-            await holidaysRef.doc(holidayId).delete();
-
-            fetchData();
-
-          } catch (error) {
-
-            setMessage(`Error deleting holiday: ${error.message}`);
-
-            console.error(error);
-
-          }
-
-          setConfirmDelete(null);
-
-          closeHolidayModal();
+        setConfirmDelete(null);
 
       };
 
       
 
-      const handleDeleteScheduled = async (scheduledId) => {
+      const handlePermanentDelete = async (activityId) => {
 
           try {
 
-            await scheduledRef.doc(scheduledId).delete();
+            await base(airtableTableName).destroy(activityId);
 
-            fetchData();
+            setMessage('Activity permanently deleted!');
+
+            fetchActivities(); // Refresh data from Airtable
 
           } catch (error) {
 
-            setMessage(`Error deleting scheduled activity: ${error.message}`);
+            setMessage(`Error deleting activity: ${error.message}`);
 
             console.error(error);
 
           }
 
-          setConfirmDelete(null);
-
-          closeActivityModal();
-
-      };
-
-
-
-      const handleDeleteTemplate = async (templateId) => {
-
-          try {
-
-              const batch = db.batch();
-
-              const scheduledInstances = await scheduledRef.where('templateId', '==', templateId).get();
-
-              scheduledInstances.docs.forEach(doc => {
-
-                  batch.delete(doc.ref);
-
-              });
-
-              batch.delete(templatesRef.doc(templateId));
-
-              await batch.commit();
-
-              fetchData();
-
-          } catch (error) {
-
-              setMessage(`Error deleting template: ${error.message}`);
-
-              console.error(error);
-
-          }
+          closeModal();
 
           setConfirmDelete(null);
-
-          closeActivityModal();
 
       };
 
@@ -582,7 +490,11 @@
 
       const handleDragStart = (e, activity) => {
 
-        e.dataTransfer.setData("templateId", activity.id);
+        e.dataTransfer.setData("activityId", activity.id);
+
+        // También guardamos si la actividad es de la lista de no programadas para el drop
+
+        e.dataTransfer.setData("isUnscheduled", !activity.date);
 
       };
 
@@ -606,61 +518,57 @@
 
     
 
+      // Esta función maneja el soltar una actividad en el calendario.
+
+      // Ahora distingue entre "mover" (para actividades ya programadas) y "clonar" (para actividades no programadas).
+
       const handleDrop = async (e, newDate, newClass) => {
 
         e.preventDefault();
 
-        const templateId = e.dataTransfer.getData("templateId");
+        const activityId = e.dataTransfer.getData("activityId");
 
-        const template = activityTemplates.find(t => t.id === templateId);
+        const isUnscheduled = e.dataTransfer.getData("isUnscheduled") === "true";
 
         
 
-        // Use the updated getHolidayForDay function to check for class-specific holidays
+        // Busca la actividad original
 
-        const holidayForDay = getHolidayForDay(newDate, newClass);
+        const originalActivity = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
 
-        if (holidayForDay) {
+      
 
-            setMessage('Cannot schedule an activity on a holiday for this class.');
+        if (originalActivity) {
 
-            setDraggedOverCell(null);
-
-            return;
-
-        }
-
-
-
-        if (template) {
-
-            const unitNumber = template.unit ? template.unit.split(' ')[1] : '';
+            const unitNumber = originalActivity.unit ? originalActivity.unit.split(' ')[1] : '';
 
             const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
 
-            const titleWithoutPrefix = template.title.startsWith(unitPrefix)
+            
 
-              ? template.title.substring(unitPrefix.length)
+            // Removemos el prefijo de la unidad si existe para no duplicarlo al arrastrar de nuevo
 
-              : template.title;
+            const titleWithoutPrefix = originalActivity.title.startsWith(unitPrefix) 
+
+              ? originalActivity.title.substring(unitPrefix.length) 
+
+              : originalActivity.title;
 
 
 
-            const scheduledData = {
+            // Preparamos los datos a guardar
 
-              "templateId": template.id,
+            const activityData = {
 
-              "title": `${unitPrefix}${titleWithoutPrefix}`,
+              "Title": `${unitPrefix}${titleWithoutPrefix}`,
 
-              "description": template.description,
+              "Description": originalActivity.description,
 
-              "unit": template.unit,
+              "Unit": originalActivity.unit,
 
-              "date": newDate.toISOString().split('T')[0],
+              "Date": newDate.toISOString().split('T')[0],
 
-              "class": newClass,
-
-              "userId": userUID // Add userId for future potential rules
+              "Class": newClass
 
             };
 
@@ -668,13 +576,35 @@
 
             try {
 
-                await scheduledRef.add(scheduledData);
+                if (isUnscheduled) {
 
-                fetchData();
+                    // Si la actividad viene de la lista de no programadas, creamos una nueva
+
+                    await base(airtableTableName).create(activityData);
+
+                    setMessage('Activity scheduled successfully!');
+
+                    console.log('Created new scheduled activity from unscheduled list.');
+
+                } else {
+
+                    // Si la actividad ya estaba programada, la actualizamos
+
+                    await base(airtableTableName).update(activityId, activityData);
+
+                    setMessage('Activity updated successfully!');
+
+                    console.log('Updated existing scheduled activity.');
+
+                }
+
+                
+
+                fetchActivities(); // Refresh data from Airtable
 
             } catch (error) {
 
-                setMessage(`Error scheduling activity: ${error.message}`);
+                setMessage(`Error updating activity: ${error.message}`);
 
                 console.error(error);
 
@@ -688,9 +618,45 @@
 
       
 
+      // Esta función maneja el soltar una actividad en el área de actividades no programadas.
+
+      // Se usa para "desagendar" una actividad del calendario.
+
       const handleUnscheduledDrop = async (e) => {
 
         e.preventDefault();
+
+        const activityId = e.dataTransfer.getData("activityId");
+
+        const activityToUpdate = activities.find(act => act.id === activityId);
+
+    
+
+        if (activityToUpdate) {
+
+          try {
+
+            await base(airtableTableName).update(activityToUpdate.id, {
+
+              "Date": null,
+
+              "Class": null
+
+            });
+
+            setMessage('Activity unscheduled successfully!');
+
+            fetchActivities();
+
+          } catch (error) {
+
+            setMessage(`Error unscheduling activity: ${error.message}`);
+
+            console.error(error);
+
+          }
+
+        }
 
       };
 
@@ -742,9 +708,13 @@
 
         
 
-        const isScheduled = selectedActivity && selectedActivity.isScheduled;
+        // Determina qué función de eliminación se usará
 
-        const deleteButtonText = isScheduled ? 'Delete Instance' : 'Delete All';
+        const isScheduled = selectedActivity && selectedActivity.date;
+
+        const handleDeleteFunction = isScheduled ? handleUnschedule : handlePermanentDelete;
+
+        const deleteButtonText = isScheduled ? 'Unschedule' : 'Delete Permanently';
 
 
 
@@ -752,9 +722,9 @@
 
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
 
-            <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+            <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
 
-              <h2 className="text-xl font-bold mb-4 text-gray-800">{isScheduled ? 'Edit Scheduled Activity' : 'Add/Edit Unscheduled Activity'}</h2>
+              <h2 className="text-xl font-bold mb-4">{selectedActivity && selectedActivity.date ? 'Edit Scheduled Activity' : 'Add/Edit Unscheduled Activity'}</h2>
 
               <div className="space-y-4">
 
@@ -802,57 +772,53 @@
 
                 </div>
 
-                {isScheduled && (
+                <div>
 
-                  <React.Fragment>
+                  <label className="block text-sm font-medium text-gray-700">Class</label>
 
-                    <div>
+                  <select
 
-                      <label className="block text-sm font-medium text-gray-700">Class</label>
+                    name="class"
 
-                      <select
+                    value={formData.class || ''}
 
-                        name="class"
+                    onChange={handleChange}
 
-                        value={formData.class || ''}
+                    disabled={!isScheduled}
 
-                        onChange={handleChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
 
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
 
-                      >
+                    <option value="">Unscheduled</option>
 
-                        <option value="">Unscheduled</option>
+                    {classes.map(c => <option key={c} value={c}>{c}</option>)}
 
-                        {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
 
-                      </select>
+                </div>
 
-                    </div>
+                <div>
 
-                    <div>
+                  <label className="block text-sm font-medium text-gray-700">Date</label>
 
-                      <label className="block text-sm font-medium text-gray-700">Date</label>
+                  <input
 
-                      <input
+                    type="date"
 
-                        type="date"
+                    name="date"
 
-                        name="date"
+                    value={formData.date || ''}
 
-                        value={formData.date || ''}
+                    onChange={handleChange}
 
-                        onChange={handleChange}
+                    disabled={!isScheduled}
 
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
 
-                      />
+                  />
 
-                    </div>
-
-                  </React.Fragment>
-
-                )}
+                </div>
 
                 <div>
 
@@ -878,7 +844,7 @@
 
               <div className="mt-6 flex justify-end space-x-3">
 
-                {selectedActivity.id && (
+                {selectedActivity && (
 
                   <button
 
@@ -896,7 +862,7 @@
 
                 <button
 
-                  onClick={closeActivityModal}
+                  onClick={closeModal}
 
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
 
@@ -908,7 +874,7 @@
 
                 <button
 
-                  onClick={() => handleSave(formData, isScheduled)}
+                  onClick={() => handleSave(formData)}
 
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
 
@@ -928,220 +894,6 @@
 
       };
 
-
-
-      const HolidayModal = () => {
-
-        const [formData, setFormData] = React.useState(
-
-            selectedHoliday ? { ...selectedHoliday } : {
-
-                name: '',
-
-                startDate: '',
-
-                endDate: '',
-
-                classes: [],
-
-                appliesToAll: false,
-
-            }
-
-        );
-
-
-
-        const handleChange = (e) => {
-
-            const { name, value, type, checked } = e.target;
-
-            if (name === "appliesToAll") {
-
-                setFormData({ ...formData, [name]: checked });
-
-            } else {
-
-                setFormData({ ...formData, [name]: value });
-
-            }
-
-        };
-
-        
-
-        // New handler for class checkboxes
-
-        const handleClassChange = (className, checked) => {
-
-            if (checked) {
-
-                setFormData(prev => ({ ...prev, classes: [...prev.classes, className] }));
-
-            } else {
-
-                setFormData(prev => ({ ...prev, classes: prev.classes.filter(c => c !== className) }));
-
-            }
-
-        };
-
-
-
-        return (
-
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
-
-              <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
-
-                  <h2 className="text-xl font-bold mb-4 text-gray-800">{selectedHoliday ? 'Edit Holiday/Vacation' : 'Add Holiday/Vacation'}</h2>
-
-                  <div className="space-y-4">
-
-                      <div>
-
-                          <label className="block text-sm font-medium text-gray-700">Name</label>
-
-                          <input type="text" name="name" value={formData.name} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-
-                      </div>
-
-                      <div>
-
-                          <label className="block text-sm font-medium text-gray-700">Start Date</label>
-
-                          <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-
-                      </div>
-
-                      <div>
-
-                          <label className="block text-sm font-medium text-gray-700">End Date</label>
-
-                          <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
-
-                      </div>
-
-                      {/* New section for class selection */}
-
-                      <div className="flex items-center space-x-2">
-
-                        <input
-
-                            type="checkbox"
-
-                            id="appliesToAll"
-
-                            name="appliesToAll"
-
-                            checked={formData.appliesToAll}
-
-                            onChange={handleChange}
-
-                            className="rounded text-blue-600 focus:ring-blue-500"
-
-                        />
-
-                        <label htmlFor="appliesToAll" className="text-sm font-medium text-gray-700">
-
-                          Applies to All Classes
-
-                        </label>
-
-                      </div>
-
-                      {!formData.appliesToAll && (
-
-                          <div>
-
-                              <label className="block text-sm font-medium text-gray-700 mb-2">Select Classes</label>
-
-                              <div className="grid grid-cols-2 gap-2">
-
-                                  {classes.map(c => (
-
-                                      <div key={c} className="flex items-center space-x-2">
-
-                                          <input
-
-                                              type="checkbox"
-
-                                              id={`class-${c}`}
-
-                                              checked={formData.classes.includes(c)}
-
-                                              onChange={(e) => handleClassChange(c, e.target.checked)}
-
-                                              className="rounded text-blue-600 focus:ring-blue-500"
-
-                                          />
-
-                                          <label htmlFor={`class-${c}`} className="text-sm text-gray-600">{c}</label>
-
-                                      </div>
-
-                                  ))}
-
-                              </div>
-
-                          </div>
-
-                      )}
-
-                  </div>
-
-                  <div className="mt-6 flex justify-end space-x-3">
-
-                      {selectedHoliday && (
-
-                          <button
-
-                              onClick={() => setConfirmDelete(selectedHoliday.id)}
-
-                              className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-
-                          >
-
-                              Delete
-
-                          </button>
-
-                      )}
-
-                      <button
-
-                          onClick={closeHolidayModal}
-
-                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-
-                      >
-
-                          Cancel
-
-                      </button>
-
-                      <button
-
-                          onClick={() => handleSaveHoliday(formData)}
-
-                          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-
-                      >
-
-                          Save
-
-                      </button>
-
-                  </div>
-
-              </div>
-
-          </div>
-
-        );
-
-      };
-
     
 
       if (loading) {
@@ -1154,7 +906,7 @@
 
               <h2 className="text-2xl font-bold mb-2">Cargando actividades...</h2>
 
-              <p className="text-gray-600">Conectando a Firebase.</p>
+              <p className="text-gray-600">Conectando a Airtable.</p>
 
             </div>
 
@@ -1164,85 +916,75 @@
 
       }
 
-      
-
-      // Updated function to check for class-specific holidays
-
-      const getHolidayForDay = (day, className) => {
-
-        const dayDate = day.toISOString().split('T')[0];
-
-        const foundHoliday = holidays.find(h => {
-
-          const isDateInRange = dayDate >= h.startDate && dayDate <= h.endDate;
-
-          const appliesToClass = h.appliesToAll || (h.classes && h.classes.includes(className));
-
-          return isDateInRange && appliesToClass;
-
-        });
-
-        return foundHoliday || null;
-
-      };
-
 
 
       return (
 
-        <div className="font-sans antialiased text-gray-800 bg-[#F8F8F8] min-h-screen p-4 flex flex-col">
+        <div className="font-sans antialiased text-gray-800 bg-gray-100 min-h-screen p-4 flex flex-col">
 
-          {/* Main Header (Title and User Actions) */}
+          <div className="flex justify-between items-center mb-6">
 
-          <div className="flex justify-between items-start mb-4">
+            <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
 
-            <div className="flex-1 text-center">
+            <div className="flex items-center space-x-4">
 
-              <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
+              <span className="text-sm font-medium text-gray-600">{user.email}</span>
 
-            </div>
+              <button
 
-            <div className="flex flex-col items-end space-y-2">
+                onClick={onSignOut}
 
-                <div className="flex items-center space-x-4">
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
 
-                  <span className="text-sm font-medium text-gray-600">{user.email}</span>
+              >
 
-                  <button
+                Sign Out
 
-                    onClick={onSignOut}
-
-                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-
-                  >
-
-                    Sign Out
-
-                  </button>
-
-                </div>
-
-                {isHolidayManager && (
-
-                  <button
-
-                      onClick={() => openHolidayModal()}
-
-                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
-
-                  >
-
-                    Manage Holidays
-
-                  </button>
-
-                )}
+              </button>
 
             </div>
 
           </div>
 
-          <div className="flex-1 bg-white rounded-xl shadow-md p-4 lg:p-6 overflow-x-auto">
+          <div className="flex-1 bg-white rounded-xl shadow-lg p-4 lg:p-6 overflow-x-auto">
+
+            {/* Calendar Header */}
+
+            <div className="flex justify-between items-center mb-6">
+
+              <h2 className="text-xl font-bold md:text-2xl">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+
+              <div className="flex space-x-2">
+
+                <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
+
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+
+                </button>
+
+                <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="px-3 py-1 text-sm font-medium text-gray-700 rounded-full hover:bg-gray-200">
+
+                  Today
+
+                </button>
+
+                <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
+
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+
+                </button>
+
+              </div>
+
+              <button onClick={() => openModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+
+                Add Activity
+
+              </button>
+
+            </div>
+
+    
 
             {/* Main Content Area */}
 
@@ -1252,7 +994,7 @@
 
               <div
 
-                className="w-full lg:w-1/4 p-4 bg-gray-100 rounded-xl shadow-inner min-h-[200px]"
+                className="w-full lg:w-1/4 p-4 bg-gray-50 rounded-xl shadow-inner min-h-[200px]"
 
                 onDragOver={(e) => e.preventDefault()}
 
@@ -1260,17 +1002,9 @@
 
               >
 
-                <h3 className="text-lg font-bold mb-2 text-center text-white bg-gray-800 rounded-md p-2 -m-2 mb-2">Unscheduled Activities</h3>
+                <h3 className="text-lg font-bold mb-2">Unscheduled Activities</h3>
 
-                <div className="text-center">
-
-                  <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 mb-4">
-
-                    Add Activity
-
-                  </button>
-
-                </div>
+                <p className="text-sm text-gray-500 mb-4">{currentWeekStart.toLocaleString('default', { month: 'long' })}</p>
 
                 {/* Unit filter dropdown */}
 
@@ -1304,27 +1038,27 @@
 
                 <div className="space-y-2">
 
-                  {activityTemplates
+                  {unscheduledActivities
 
-                    .filter(template => selectedUnit === 'All' || template.unit === selectedUnit)
+                    .filter(activity => selectedUnit === 'All' || activity.unit === selectedUnit)
 
-                    .map(template => (
+                    .map(activity => (
 
                       <div
 
-                        key={template.id}
+                        key={activity.id}
 
-                        className={`p-2 text-sm text-gray-800 cursor-pointer bg-white rounded-md shadow-sm hover:shadow-md border border-gray-200`}
+                        className={`p-2 text-sm rounded-lg text-white cursor-pointer transition-shadow duration-200 bg-gray-400 hover:shadow-md`}
 
-                        onClick={() => openActivityModal(template)}
+                        onClick={() => openModal(activity)}
 
                         draggable
 
-                        onDragStart={(e) => handleDragStart(e, template)}
+                        onDragStart={(e) => handleDragStart(e, activity)}
 
                       >
 
-                        {template.title}
+                        {activity.title}
 
                       </div>
 
@@ -1340,66 +1074,382 @@
 
               <div className="flex-1 overflow-x-auto">
 
-                {/* Calendar Header with Navigation */}
+                <div className="grid grid-cols-6 gap-1 min-w-[768px] border-collapse">
 
-                <div className="flex justify-center items-center mb-4">
+                  {/* Corner spacer */}
 
-                    <h2 className="text-xl font-bold md:text-2xl mr-4 text-gray-600">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                  <div className="col-span-1"></div>
 
-                    <div className="flex space-x-2">
+                  {/* Weekday Headers */}
 
-                      <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                  {weekdays.map(day => (
 
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                    <div key={day.toString()} className="text-center font-bold text-gray-600 bg-gray-100 rounded-t-lg p-2">
 
-                      </button>
+                      <div className="text-sm">{day.toLocaleString('default', { weekday: 'short' })}</div>
 
-                      <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
-
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-8h2v-4h-2v4zm1-6a1 1 0 100 2 1 1 0 000-2z" /></svg>
-
-                      </button>
-
-                      <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
-
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-
-                      </button>
+                      <div className="text-xl">{day.getDate()}</div>
 
                     </div>
 
-                </div>
-
-                <div className="grid grid-cols-6 gap-1 min-w-[768px] border-collapse">
-
-                    {/* Corner spacer */}
-
-                    <div className="col-span-1"></div>
-
-                    {/* Weekday Headers */}
-
-                    {weekdays.map(day => (
-
-                      <div key={day.toString()} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md shadow-sm p-2 border-b border-gray-300">
-
-                        <div className="text-sm">{day.toLocaleString('default', { weekday: 'short' })}</div>
-
-                        <div className="text-xl">{day.getDate()}</div>
-
-                      </div>
-
-                    ))}
+                  ))}
 
     
 
-                    {/* Class Rows */}
+                  {/* Class Rows */}
 
-                    {classes.map(c => (
+                  {classes.map(c => (
 
-                      <React.Fragment key={c}>
+                    <React.Fragment key={c}>
 
-                        {/* Class row header */}
+                      {/* Class row header */}
 
-                        <div className={`p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300`}>
+                      <div className={`p-2 font-semibold text-white bg-gray-700 rounded-bl-lg flex items-center justify-center ${classColors[c]} text-center`}>
 
-                         
+                        {c}
+
+                      </div>
+
+                      {/* Daily cells for each class */}
+
+                      {weekdays.map(day => {
+
+                        const dayActivities = activities.filter(act =>
+
+                          act.date === day.toISOString().split('T')[0] && act.class === c
+
+                        );
+
+                        const formattedDate = day.toISOString().split('T')[0];
+
+                        const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
+
+        
+
+                        return (
+
+                          <div
+
+                            key={`${formattedDate}-${c}`}
+
+                            className={`p-2 min-h-[120px] rounded-lg transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-indigo-200' : ''}`}
+
+                            onDragOver={(e) => handleDragOver(e, day, c)}
+
+                            onDragLeave={handleDragLeave}
+
+                            onDrop={(e) => handleDrop(e, day, c)}
+
+                          >
+
+                            <div className="space-y-1">
+
+                              {dayActivities.map(activity => (
+
+                                <div
+
+                                  key={activity.id}
+
+                                  className={`p-1 text-xs rounded-lg text-white cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
+
+                                  onClick={() => openModal(activity)}
+
+                                  draggable
+
+                                  onDragStart={(e) => handleDragStart(e, activity)}
+
+                                >
+
+                                  {activity.title}
+
+                                </div>
+
+                              ))}
+
+                            </div>
+
+                          </div>
+
+                        );
+
+                      })}
+
+                    </React.Fragment>
+
+                  ))}
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+          {isModalOpen && <ActivityModal />}
+
+          {message && <MessageBox message={message} onClose={() => setMessage('')} />}
+
+          {confirmDelete && <ConfirmationBox
+
+            message={selectedActivity.date ? "Are you sure you want to unschedule this activity?" : "Are you sure you want to permanently delete this activity?"}
+
+            onConfirm={selectedActivity.date ? () => handleUnschedule(confirmDelete) : () => handlePermanentDelete(confirmDelete)}
+
+            onCancel={() => setConfirmDelete(null)}
+
+          />}
+
+        </div>
+
+      );
+
+    }
+
+    
+
+    // Login screen component
+
+    function LoginScreen({ onSignIn, onMessageBox }) {
+
+      return (
+
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 p-4">
+
+          <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm text-center">
+
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">Welcome to the 8th Grade Tracker</h2>
+
+            <p className="text-gray-600 mb-6">Please sign in with your Google account to access your calendar.</p>
+
+            <button
+
+              onClick={onSignIn}
+
+              className="px-6 py-3 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md"
+
+            >
+
+              Sign In with Google
+
+            </button>
+
+          </div>
+
+        </div>
+
+      );
+
+    }
+
+    
+
+    // Main wrapper component to handle authentication state
+
+    function AppWrapper() {
+
+      const [user, setUser] = React.useState(null);
+
+      const [loading, setLoading] = React.useState(true);
+
+      const [message, setMessage] = React.useState('');
+
+      
+
+      // Firebase credentials
+
+      const firebaseConfig = {
+
+        apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64',
+
+        authDomain: 'th-grade-tracker.firebaseapp.com', 
+
+      };
+
+
+
+      // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
+
+      const authorizedEmails = [
+
+        'ssarmiento@craighouse.cl',
+
+      ].map(email => email.toLowerCase().trim()); // Normalizar a minúsculas y quitar espacios
+
+
+
+      React.useEffect(() => {
+
+        if (!firebaseConfig.apiKey) {
+
+          setMessage('Error de configuración: La clave de API de Firebase está vacía.');
+
+          setLoading(false);
+
+          return;
+
+        }
+
+
+
+        try {
+
+          if (!firebase.apps.length) {
+
+            firebase.initializeApp(firebaseConfig);
+
+          }
+
+        } catch (e) {
+
+          console.error("Error al inicializar Firebase:", e);
+
+          setMessage(`Error al inicializar Firebase: ${e.message}`);
+
+          setLoading(false);
+
+          return;
+
+        }
+
+
+
+        const auth = firebase.auth();
+
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+
+          setLoading(false);
+
+          if (user) {
+
+            const userEmail = user.email.toLowerCase().trim();
+
+            console.log("Correo electrónico recibido de Firebase:", userEmail);
+
+            console.log("Correos electrónicos autorizados:", authorizedEmails);
+
+
+
+            if (authorizedEmails.includes(userEmail)) {
+
+              setUser(user);
+
+              console.log("Usuario autorizado. Acceso concedido.");
+
+            } else {
+
+              setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
+
+              auth.signOut();
+
+              console.log("Usuario no autorizado. Acceso denegado y se cierra la sesión.");
+
+            }
+
+          } else {
+
+            setUser(null);
+
+          }
+
+        });
+
+
+
+        return () => unsubscribe();
+
+      }, []);
+
+
+
+      const handleSignIn = async () => {
+
+        const provider = new firebase.auth.GoogleAuthProvider();
+
+        try {
+
+          const result = await firebase.auth().signInWithPopup(provider);
+
+          const userEmail = result.user.email.toLowerCase().trim();
+
+          
+
+          if (authorizedEmails.includes(userEmail)) {
+
+            setUser(result.user);
+
+            console.log("Login exitoso. El estado del usuario se ha actualizado directamente.");
+
+          } else {
+
+            setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
+
+            firebase.auth().signOut();
+
+          }
+
+        } catch (error) {
+
+          setMessage(`Error durante el inicio de sesión: ${error.message}`);
+
+          console.error(error);
+
+        }
+
+      };
+
+
+
+      const handleSignOut = async () => {
+
+        try {
+
+          await firebase.auth().signOut();
+
+        } catch (error) {
+
+          setMessage(`Error durante el cierre de sesión: ${error.message}`);
+
+          console.error(error);
+
+        }
+
+      };
+
+
+
+      return (
+
+        <React.Fragment>
+
+          {user ? (
+
+            <App user={user} onSignOut={handleSignOut} />
+
+          ) : (
+
+            <LoginScreen onSignIn={handleSignIn} />
+
+          )}
+
+          {message && <MessageBox message={message} onClose={() => setMessage('')} />}
+
+        </React.Fragment>
+
+      );
+
+    }
+
+
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+
+    root.render(<AppWrapper />);
+
+</script>
+
+
+
+</body>
+
+</html>

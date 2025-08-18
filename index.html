@@ -256,10 +256,13 @@
         setDraggedOverCell(null);
       };
     
+      // Esta función maneja el soltar una actividad en el calendario.
+      // Se usa para programar una actividad no programada o para re-programar una actividad ya existente.
       const handleDrop = async (e, newDate, newClass) => {
         e.preventDefault();
         const activityId = e.dataTransfer.getData("activityId");
         
+        // Busca la actividad tanto en la lista de programadas como en la de no programadas
         const activityToUpdate = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
       
         if (activityToUpdate) {
@@ -291,6 +294,8 @@
         setDraggedOverCell(null);
       };
       
+      // Esta función maneja el soltar una actividad en el área de actividades no programadas.
+      // Se usa para "desagendar" una actividad del calendario.
       const handleUnscheduledDrop = async (e) => {
         e.preventDefault();
         const activityId = e.dataTransfer.getData("activityId");

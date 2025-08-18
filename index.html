@@ -101,22 +101,20 @@
       const [confirmDelete, setConfirmDelete] = React.useState(null);
     
       // Airtable credentials
+      // ⚠️ Importante: Asegúrate de que esta clave tenga permisos de "lectura" y "escritura".
       const airtableApiKey = 'pat5F2wppyaEJmcas.16dbab5e7eea0d2c720cbaff9d2184c87674cba3e3e7c54904262edd016c0641';
       const airtableBaseId = 'app1ZWNrSqzTWUYPR';
-      const airtableTableName = 'Activities';
+      const airtableTableName = 'Activities'; // Esta es la tabla que usará la aplicación.
       
       let base;
-      // Added a check to handle the case where Airtable is not initialized
       try {
-        if (airtableApiKey && airtableBaseId) {
-            console.log(`Intentando conectar con Airtable. Base ID: ${airtableBaseId}, API Key: ${airtableApiKey}`);
-            base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
-        } else {
-            console.error("Falta la API Key o el Base ID de Airtable.");
-        }
+        console.log(`Intentando conectar con Airtable. Base ID: ${airtableBaseId}, API Key: ${airtableApiKey}`);
+        base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
       } catch (e) {
-        setMessage(`Error al inicializar Airtable. Verifique su API Key y Base ID. Detalles del error: ${e.message}`);
+        setMessage(`Error al inicializar Airtable. Esto podría deberse a credenciales incorrectas. Verifique su API Key y Base ID.`);
         console.error("Error initializing Airtable:", e);
+        // We set loading to false so the user can see the message.
+        if (loading) setLoading(false);
       }
 
       const getWeekdays = (startDate) => {
@@ -168,12 +166,8 @@
       };
       
       React.useEffect(() => {
-        if (base) {
-            fetchActivities();
-        } else {
-            setLoading(false);
-        }
-      }, [base]);
+        fetchActivities();
+      }, []);
     
       const handlePreviousWeek = () => {
         setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() - 7));
@@ -422,24 +416,6 @@
           </div>
         );
       }
-      
-      // If base is not initialized, show an error message
-      if (!base) {
-          return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
-                <div className="text-center p-8 bg-red-100 border border-red-400 text-red-700 rounded-lg shadow-md w-full max-w-md mx-auto">
-                    <p className="font-bold">Error de Conexión a Airtable</p>
-                    <p className="text-sm mt-2">No se pudo conectar a la base de datos de Airtable. Por favor, asegúrese de que el **API Key** y el **Base ID** sean correctos y que el token tenga los permisos necesarios.</p>
-                    <button
-                        onClick={onSignOut}
-                        className="mt-4 px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-                    >
-                        Sign Out
-                    </button>
-                </div>
-            </div>
-          );
-      }
 
       return (
         <div className="font-sans antialiased text-gray-800 bg-gray-100 min-h-screen p-4 flex flex-col">
@@ -670,6 +646,7 @@
           const userEmail = result.user.email.toLowerCase().trim();
           
           if (authorizedEmails.includes(userEmail)) {
+            // ✅ Actualización clave: establecer el usuario directamente en el estado aquí
             setUser(result.user);
             console.log("Login exitoso. El estado del usuario se ha actualizado directamente.");
           } else {

@@ -587,8 +587,10 @@
       
       // Firebase credentials
       const firebaseConfig = {
-        // La clave de API es el único dato necesario aquí. El entorno Canvas proporciona los demás automáticamente.
-        apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64'
+        apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64',
+        // ⚠️ ¡IMPORTANTE! Agrega tu authDomain aquí.
+        // Lo puedes encontrar en la consola de Firebase, en "Project Settings" -> "General"
+        authDomain: 'th-grade-tracker.firebaseapp.com', 
       };
 
       // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨

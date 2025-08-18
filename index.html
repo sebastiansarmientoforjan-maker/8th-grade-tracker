@@ -101,8 +101,9 @@
       const [confirmDelete, setConfirmDelete] = React.useState(null);
     
       // Airtable API setup
-      // NOTE: Replace these placeholder values with your actual Airtable keys
-      // Una vez que obtengas tus claves de Airtable, reemplaza estos marcadores de posición.
+      // Por favor, reemplaza estos marcadores de posición con tu clave de API de Airtable y el ID de la base.
+      // Puedes encontrar estos valores en tu cuenta de Airtable.
+      // ¡Recuerda, el error que estás viendo es porque estos valores no son válidos!
       const base = new Airtable({ apiKey: 'YOUR_AIRTABLE_API_KEY_HERE' }).base('YOUR_AIRTABLE_BASE_ID_HERE');
 
       const getWeekdays = (startDate) => {
@@ -120,6 +121,13 @@
       const fetchActivities = async () => {
         setLoading(true);
         try {
+          // Check for placeholder keys
+          if (base.apiKey === 'YOUR_AIRTABLE_API_KEY_HERE' || base.baseId === 'YOUR_AIRTABLE_BASE_ID_HERE') {
+            setMessage('Error de configuración: Por favor, reemplace "YOUR_AIRTABLE_API_KEY_HERE" y "YOUR_AIRTABLE_BASE_ID_HERE" con sus claves reales de Airtable.');
+            setLoading(false);
+            return;
+          }
+
           const records = await base('Activities').select({
             view: "Grid view"
           }).all();
@@ -140,7 +148,7 @@
           setUnscheduledActivities(unscheduled);
           setMessage('Activities loaded successfully!');
         } catch (error) {
-          setMessage(`Error fetching activities: ${error.message}. Please check your Airtable API key and Base ID.`);
+          setMessage(`Error fetching activities. Please ensure your Airtable API key and Base ID are correct and the 'Activities' table exists.`);
           console.error(error);
         } finally {
           setLoading(false);
@@ -570,7 +578,7 @@
       React.useEffect(() => {
         // Firebase configuration from Vercel environment variables
         // NOTE: Replace these placeholder values with your actual Firebase keys
-        // Reemplaza estos valores con tus claves reales de Firebase.
+        // Por favor, reemplaza estos valores con tus claves reales de Firebase.
         const firebaseConfig = {
           apiKey: 'YOUR_FIREBASE_API_KEY_HERE',
           authDomain: 'YOUR_FIREBASE_AUTH_DOMAIN_HERE',

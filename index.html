@@ -229,12 +229,14 @@
                     "name": holidayData.name,
                     "startDate": holidayData.startDate,
                     "endDate": holidayData.endDate,
+                    "class": holidayData.class,
                 });
             } else {
                 await holidaysRef.add({
                     "name": holidayData.name,
                     "startDate": holidayData.startDate,
                     "endDate": holidayData.endDate,
+                    "class": holidayData.class,
                     "userId": userUID
                 });
             }
@@ -306,7 +308,7 @@
         const templateId = e.dataTransfer.getData("templateId");
         const template = activityTemplates.find(t => t.id === templateId);
         
-        const holidayForDay = getHolidayForDay(newDate);
+        const holidayForDay = getHolidayForDay(newDate, newClass);
         if (holidayForDay) {
             setMessage('Cannot schedule an activity on a holiday.');
             setDraggedOverCell(null);
@@ -468,6 +470,7 @@
                 name: '',
                 startDate: '',
                 endDate: '',
+                class: 'All', // Add class field with default 'All'
             }
         );
 
@@ -484,6 +487,18 @@
                       <div>
                           <label className="block text-sm font-medium text-gray-700">Name</label>
                           <input type="text" name="name" value={formData.name} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">Applies to Class</label>
+                          <select
+                            name="class"
+                            value={formData.class || 'All'} // Handle potential null/undefined values
+                            onChange={handleChange}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                          >
+                            <option value="All">All Classes</option>
+                            {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
                       </div>
                       <div>
                           <label className="block text-sm font-medium text-gray-700">Start Date</label>
@@ -532,10 +547,10 @@
         );
       }
       
-      const getHolidayForDay = (day) => {
+      const getHolidayForDay = (day, className) => {
         const dayDate = day.toISOString().split('T')[0];
         const foundHoliday = holidays.find(h => {
-          return dayDate >= h.startDate && dayDate <= h.endDate;
+          return dayDate >= h.startDate && dayDate <= h.endDate && (h.class === 'All' || h.class === className);
         });
         return foundHoliday || null;
       };
@@ -656,7 +671,7 @@
                         );
                         const formattedDate = day.toISOString().split('T')[0];
                         const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
-                        const holiday = getHolidayForDay(day);
+                        const holiday = getHolidayForDay(day, c);
                         const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'} ${holiday ? 'bg-purple-100 cursor-pointer' : ''}`;
     
                         return (

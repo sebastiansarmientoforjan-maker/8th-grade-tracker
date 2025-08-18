@@ -1,1455 +1,822 @@
 <!DOCTYPE html>
-
 <html lang="en">
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>8th Grade Tracker</title>
-
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-    <!-- Airtable SDKs -->
-
-    <script src="https://cdn.jsdelivr.net/npm/airtable@0.11.6/lib/airtable.umd.js"></script>
-
-    <!-- Firebase SDKs -->
-
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
-
-    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
-
-    <style>
-
-        body {
-
-            font-family: 'Inter', sans-serif;
-
-        }
-
-    </style>
-
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8th Grade Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
 </head>
-
-<body>
-
-
+<body class="bg-[#F8F8F8]">
 
 <div id="root"></div>
 
-
-
 <script type="text/babel">
-
-    'use strict';
-
-    
-
-    // Custom message box to replace window.alert()
-
-    function MessageBox({ message, onClose }) {
-
-      return (
-
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
-
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
-
-            <p className="text-gray-800 mb-4">{message}</p>
-
-            <button
-
-              onClick={onClose}
-
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-
-            >
-
-              OK
-
-            </button>
-
-          </div>
-
-        </div>
-
-      );
-
-    }
-
-
-
-    // Custom confirmation box to replace window.confirm()
-
-    function ConfirmationBox({ message, onConfirm, onCancel }) {
-
-      return (
-
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
-
-          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
-
-            <p className="text-gray-800 mb-4">{message}</p>
-
-            <div className="flex justify-center space-x-4">
-
-                <button
-
-                onClick={onCancel}
-
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-
-              >
-
-                Cancel
-
-              </button>
-
-              <button
-
-                onClick={onConfirm}
-
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-
-              >
-
-                Delete
-
-              </button>
-
-            </div>
-
-          </div>
-
-        </div>
-
-      );
-
-    }
-
-    
-
-    // Main application component
-
-    function App({ user, onSignOut }) {
-
-      const classes = ['8A1', '8A2', '8R1', '8R2', '8R3', '8R4'];
-
-      const classColors = {
-
-        '8A1': 'bg-red-500',
-
-        '8A2': 'bg-orange-500',
-
-        '8R1': 'bg-yellow-500',
-
-        '8R2': 'bg-green-500',
-
-        '8R3': 'bg-blue-500',
-
-        '8R4': 'bg-indigo-500',
-
-      };
-
-    
-
-      const [currentWeekStart, setCurrentWeekStart] = React.useState(() => {
-
-        const today = new Date();
-
-        const dayOfWeek = today.getDay();
-
-        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
-
-        const startOfWeek = new Date(today.setDate(diff));
-
-        return startOfWeek;
-
-      });
-
-      const [activities, setActivities] = React.useState([]);
-
-      const [unscheduledActivities, setUnscheduledActivities] = React.useState([]);
-
-      const [selectedUnit, setSelectedUnit] = React.useState('All');
-
-      const [selectedActivity, setSelectedActivity] = React.useState(null);
-
-      const [isModalOpen, setIsModalOpen] = React.useState(false);
-
-      const [draggedOverCell, setDraggedOverCell] = React.useState(null);
-
-      const [message, setMessage] = React.useState('');
-
-      const [loading, setLoading] = React.useState(true);
-
-      const [confirmDelete, setConfirmDelete] = React.useState(null);
-
-    
-
-      // Airtable credentials
-
-      const airtableApiKey = 'pat5F2wppyaEJmcas.16dbab5e7eea0d2c720cbaff9d2184c87674cba3e3e7c54904262edd016c0641';
-
-      const airtableBaseId = 'app1ZWNrSqzTWUYPR';
-
-      const airtableTableName = 'Activities';
-
-      
-
-      let base;
-
-      try {
-
-        console.log(`Intentando conectar con Airtable. Base ID: ${airtableBaseId}, API Key: ${airtableApiKey}`);
-
-        base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
-
-      } catch (e) {
-
-        setMessage(`Error al inicializar Airtable. Esto podría deberse a credenciales incorrectas. Verifique su API Key y Base ID.`);
-
-        console.error("Error initializing Airtable:", e);
-
-        if (loading) setLoading(false);
-
-      }
-
-
-
-      const getWeekdays = (startDate) => {
-
-        const weekdays = [];
-
-        for (let i = 0; i < 5; i++) {
-
-          const day = new Date(startDate);
-
-          day.setDate(startDate.getDate() + i);
-
-          weekdays.push(day);
-
-        }
-
-        return weekdays;
-
-      };
-
-    
-
-      const weekdays = getWeekdays(currentWeekStart);
-
-      
-
-      const fetchActivities = async () => {
-
-        setLoading(true);
-
-        try {
-
-          if (!base) {
-
-            setMessage('Error de configuración: No se pudo inicializar la conexión con Airtable.');
-
-            setLoading(false);
-
-            return;
-
-          }
-
-          console.log('Fetching activities from Airtable...');
-
-          const records = await base(airtableTableName).select({
-
-            view: "Grid view"
-
-          }).all();
-
-          console.log('Successfully fetched activities:', records.length, 'records.');
-
-
-
-          const allActivities = records.map(record => ({
-
-            id: record.id,
-
-            title: record.fields.Title,
-
-            description: record.fields.Description,
-
-            unit: record.fields.Unit,
-
-            class: record.fields.Class,
-
-            date: record.fields.Date
-
-          }));
-
-
-
-          const scheduled = allActivities.filter(act => act.date && act.class);
-
-          const unscheduled = allActivities.filter(act => !act.date || !act.class);
-
-
-
-          setActivities(scheduled);
-
-          setUnscheduledActivities(unscheduled);
-
-          setMessage('Activities loaded successfully!');
-
-          console.log('Activities and unscheduled activities state updated.');
-
-        } catch (error) {
-
-          setMessage(`Error fetching activities: ${error.message}. Asegúrese de que sus credenciales de Airtable sean correctas y que la tabla '${airtableTableName}' exista.`);
-
-          console.error("Error fetching activities:", error);
-
-        } finally {
-
-          setLoading(false);
-
-        }
-
-      };
-
-      
-
-      React.useEffect(() => {
-
-        console.log('useEffect triggered for fetching activities.');
-
-        fetchActivities();
-
-      }, []);
-
-    
-
-      const handlePreviousWeek = () => {
-
-        setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() - 7));
-
-      };
-
-      const handleNextWeek = () => {
-
-        setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + 7));
-
-      };
-
-    
-
-      const openModal = (activity = null) => {
-
-        setSelectedActivity(activity);
-
-        setIsModalOpen(true);
-
-      };
-
-      const closeModal = () => {
-
-        setIsModalOpen(false);
-
-        setSelectedActivity(null);
-
-      };
-
-    
-
-      const handleSave = async (activityData) => {
-
-        try {
-
-          if (activityData.id) {
-
-            await base(airtableTableName).update(activityData.id, {
-
-              "Title": activityData.title,
-
-              "Description": activityData.description,
-
-              "Unit": activityData.unit,
-
-              "Class": activityData.class,
-
-              "Date": activityData.date
-
-            });
-
-          } else {
-
-            await base(airtableTableName).create({
-
-              "Title": activityData.title,
-
-              "Description": activityData.description,
-
-              "Unit": activityData.unit,
-
-              "Class": activityData.class,
-
-              "Date": activityData.date
-
-            });
-
-          }
-
-          setMessage('Activity saved successfully!');
-
-          fetchActivities(); // Refresh data from Airtable
-
-        } catch (error) {
-
-          setMessage(`Error saving activity: ${error.message}`);
-
-          console.error(error);
-
-        }
-
-        closeModal();
-
-      };
-
-      
-
-      const handleUnschedule = async (activityId) => {
-
-        try {
-
-          await base(airtableTableName).update(activityId, {
-
-            "Date": null,
-
-            "Class": null
-
-          });
-
-          setMessage('Activity unscheduled successfully!');
-
-          fetchActivities();
-
-        } catch (error) {
-
-          setMessage(`Error unscheduling activity: ${error.message}`);
-
-          console.error(error);
-
-        }
-
-        closeModal();
-
-        setConfirmDelete(null);
-
-      };
-
-      
-
-      const handlePermanentDelete = async (activityId) => {
-
-          try {
-
-            await base(airtableTableName).destroy(activityId);
-
-            setMessage('Activity permanently deleted!');
-
-            fetchActivities(); // Refresh data from Airtable
-
-          } catch (error) {
-
-            setMessage(`Error deleting activity: ${error.message}`);
-
-            console.error(error);
-
-          }
-
-          closeModal();
-
-          setConfirmDelete(null);
-
-      };
-
-    
-
-      const handleDragStart = (e, activity) => {
-
-        e.dataTransfer.setData("activityId", activity.id);
-
-        // También guardamos si la actividad es de la lista de no programadas para el drop
-
-        e.dataTransfer.setData("isUnscheduled", !activity.date);
-
-      };
-
-    
-
-      const handleDragOver = (e, date, className) => {
-
-        e.preventDefault();
-
-        setDraggedOverCell({ date, className });
-
-      };
-
-    
-
-      const handleDragLeave = () => {
-
-        setDraggedOverCell(null);
-
-      };
-
-    
-
-      // Esta función maneja el soltar una actividad en el calendario.
-
-      // Ahora distingue entre "mover" (para actividades ya programadas) y "clonar" (para actividades no programadas).
-
-      const handleDrop = async (e, newDate, newClass) => {
-
-        e.preventDefault();
-
-        const activityId = e.dataTransfer.getData("activityId");
-
-        const isUnscheduled = e.dataTransfer.getData("isUnscheduled") === "true";
-
-        
-
-        // Busca la actividad original
-
-        const originalActivity = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
-
-      
-
-        if (originalActivity) {
-
-            const unitNumber = originalActivity.unit ? originalActivity.unit.split(' ')[1] : '';
-
-            const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-
-            
-
-            // Removemos el prefijo de la unidad si existe para no duplicarlo al arrastrar de nuevo
-
-            const titleWithoutPrefix = originalActivity.title.startsWith(unitPrefix) 
-
-              ? originalActivity.title.substring(unitPrefix.length) 
-
-              : originalActivity.title;
-
-
-
-            // Preparamos los datos a guardar
-
-            const activityData = {
-
-              "Title": `${unitPrefix}${titleWithoutPrefix}`,
-
-              "Description": originalActivity.description,
-
-              "Unit": originalActivity.unit,
-
-              "Date": newDate.toISOString().split('T')[0],
-
-              "Class": newClass
-
-            };
-
-            
-
-            try {
-
-                if (isUnscheduled) {
-
-                    // Si la actividad viene de la lista de no programadas, creamos una nueva
-
-                    await base(airtableTableName).create(activityData);
-
-                    setMessage('Activity scheduled successfully!');
-
-                    console.log('Created new scheduled activity from unscheduled list.');
-
-                } else {
-
-                    // Si la actividad ya estaba programada, la actualizamos
-
-                    await base(airtableTableName).update(activityId, activityData);
-
-                    setMessage('Activity updated successfully!');
-
-                    console.log('Updated existing scheduled activity.');
-
-                }
-
-                
-
-                fetchActivities(); // Refresh data from Airtable
-
-            } catch (error) {
-
-                setMessage(`Error updating activity: ${error.message}`);
-
-                console.error(error);
-
-            }
-
-        }
-
-        setDraggedOverCell(null);
-
-      };
-
-      
-
-      // Esta función maneja el soltar una actividad en el área de actividades no programadas.
-
-      // Se usa para "desagendar" una actividad del calendario.
-
-      const handleUnscheduledDrop = async (e) => {
-
-        e.preventDefault();
-
-        const activityId = e.dataTransfer.getData("activityId");
-
-        const activityToUpdate = activities.find(act => act.id === activityId);
-
-    
-
-        if (activityToUpdate) {
-
-          try {
-
-            await base(airtableTableName).update(activityToUpdate.id, {
-
-              "Date": null,
-
-              "Class": null
-
-            });
-
-            setMessage('Activity unscheduled successfully!');
-
-            fetchActivities();
-
-          } catch (error) {
-
-            setMessage(`Error unscheduling activity: ${error.message}`);
-
-            console.error(error);
-
-          }
-
-        }
-
-      };
-
-    
-
-      const ActivityModal = () => {
-
-        const [formData, setFormData] = React.useState(
-
-          selectedActivity ? {
-
-            title: selectedActivity.title,
-
-            class: selectedActivity.class,
-
-            date: selectedActivity.date,
-
-            description: selectedActivity.description,
-
-            unit: selectedActivity.unit,
-
-            id: selectedActivity.id
-
-          } : {
-
-            title: '',
-
-            class: null,
-
-            date: null,
-
-            description: '',
-
-            unit: 'Unit 1'
-
-          }
-
-        );
-
-    
-
-        const handleChange = (e) => {
-
-          const { name, value } = e.target;
-
-          setFormData({ ...formData, [name]: value });
-
-        };
-
-        
-
-        // Determina qué función de eliminación se usará
-
-        const isScheduled = selectedActivity && selectedActivity.date;
-
-        const handleDeleteFunction = isScheduled ? handleUnschedule : handlePermanentDelete;
-
-        const deleteButtonText = isScheduled ? 'Unschedule' : 'Delete Permanently';
-
-
-
-        return (
-
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
-
-            <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-
-              <h2 className="text-xl font-bold mb-4">{selectedActivity && selectedActivity.date ? 'Edit Scheduled Activity' : 'Add/Edit Unscheduled Activity'}</h2>
-
-              <div className="space-y-4">
-
-                <div>
-
-                  <label className="block text-sm font-medium text-gray-700">Title</label>
-
-                  <input
-
-                    type="text"
-
-                    name="title"
-
-                    value={formData.title}
-
-                    onChange={handleChange}
-
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-
-                  />
-
-                </div>
-
-                <div>
-
-                  <label className="block text-sm font-medium text-gray-700">Unit</label>
-
-                  <select
-
-                    name="unit"
-
-                    value={formData.unit || ''}
-
-                    onChange={handleChange}
-
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-
-                  >
-
-                    <option value="All">All Units</option>
-
-                    {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => <option key={u} value={u}>{u}</option>)}
-
-                  </select>
-
-                </div>
-
-                <div>
-
-                  <label className="block text-sm font-medium text-gray-700">Class</label>
-
-                  <select
-
-                    name="class"
-
-                    value={formData.class || ''}
-
-                    onChange={handleChange}
-
-                    disabled={!isScheduled}
-
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
-
-                  >
-
-                    <option value="">Unscheduled</option>
-
-                    {classes.map(c => <option key={c} value={c}>{c}</option>)}
-
-                  </select>
-
-                </div>
-
-                <div>
-
-                  <label className="block text-sm font-medium text-gray-700">Date</label>
-
-                  <input
-
-                    type="date"
-
-                    name="date"
-
-                    value={formData.date || ''}
-
-                    onChange={handleChange}
-
-                    disabled={!isScheduled}
-
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
-
-                  />
-
-                </div>
-
-                <div>
-
-                  <label className="block text-sm font-medium text-gray-700">Description</label>
-
-                  <textarea
-
-                    name="description"
-
-                    value={formData.description}
-
-                    onChange={handleChange}
-
-                    rows="3"
-
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-
-                  ></textarea>
-
-                </div>
-
-              </div>
-
-              <div className="mt-6 flex justify-end space-x-3">
-
-                {selectedActivity && (
-
-                  <button
-
-                    onClick={() => setConfirmDelete(selectedActivity.id)}
-
-                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-
-                  >
-
-                    {deleteButtonText}
-
-                  </button>
-
-                )}
-
-                <button
-
-                  onClick={closeModal}
-
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-
-                >
-
-                  Cancel
-
-                </button>
-
-                <button
-
-                  onClick={() => handleSave(formData)}
-
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-
-                >
-
-                  Save
-
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-
-        );
-
-      };
-
-    
-
-      if (loading) {
-
-        return (
-
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
-
-            <div className="text-center">
-
-              <h2 className="text-2xl font-bold mb-2">Cargando actividades...</h2>
-
-              <p className="text-gray-600">Conectando a Airtable.</p>
-
-            </div>
-
-          </div>
-
-        );
-
-      }
-
-
-
-      return (
-
-        <div className="font-sans antialiased text-gray-800 bg-gray-100 min-h-screen p-4 flex flex-col">
-
-          <div className="flex justify-between items-center mb-6">
-
-            <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
-
-            <div className="flex items-center space-x-4">
-
-              <span className="text-sm font-medium text-gray-600">{user.email}</span>
-
-              <button
-
-                onClick={onSignOut}
-
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
-
-              >
-
-                Sign Out
-
-              </button>
-
-            </div>
-
-          </div>
-
-          <div className="flex-1 bg-white rounded-xl shadow-lg p-4 lg:p-6 overflow-x-auto">
-
-            {/* Calendar Header */}
-
-            <div className="flex justify-between items-center mb-6">
-
-              <h2 className="text-xl font-bold md:text-2xl">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
-
-              <div className="flex space-x-2">
-
-                <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
-
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
-
-                </button>
-
-                <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="px-3 py-1 text-sm font-medium text-gray-700 rounded-full hover:bg-gray-200">
-
-                  Today
-
-                </button>
-
-                <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-full hover:bg-gray-200">
-
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
-
-                </button>
-
-              </div>
-
-              <button onClick={() => openModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
-
-                Add Activity
-
-              </button>
-
-            </div>
-
-    
-
-            {/* Main Content Area */}
-
-            <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4">
-
-              {/* Unscheduled Activities List */}
-
-              <div
-
-                className="w-full lg:w-1/4 p-4 bg-gray-50 rounded-xl shadow-inner min-h-[200px]"
-
-                onDragOver={(e) => e.preventDefault()}
-
-                onDrop={handleUnscheduledDrop}
-
-              >
-
-                <h3 className="text-lg font-bold mb-2">Unscheduled Activities</h3>
-
-                <p className="text-sm text-gray-500 mb-4">{currentWeekStart.toLocaleString('default', { month: 'long' })}</p>
-
-                {/* Unit filter dropdown */}
-
-                <div className="mb-4">
-
-                  <label htmlFor="unit-filter" className="sr-only">Filter by Unit</label>
-
-                  <select
-
-                    id="unit-filter"
-
-                    value={selectedUnit}
-
-                    onChange={(e) => setSelectedUnit(e.target.value)}
-
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-
-                  >
-
-                    <option value="All">All Units</option>
-
-                    {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => (
-
-                      <option key={u} value={u}>{u}</option>
-
-                    ))}
-
-                  </select>
-
-                </div>
-
-                <div className="space-y-2">
-
-                  {unscheduledActivities
-
-                    .filter(activity => selectedUnit === 'All' || activity.unit === selectedUnit)
-
-                    .map(activity => (
-
-                      <div
-
-                        key={activity.id}
-
-                        className={`p-2 text-sm rounded-lg text-white cursor-pointer transition-shadow duration-200 bg-gray-400 hover:shadow-md`}
-
-                        onClick={() => openModal(activity)}
-
-                        draggable
-
-                        onDragStart={(e) => handleDragStart(e, activity)}
-
-                      >
-
-                        {activity.title}
-
-                      </div>
-
-                    ))}
-
-                </div>
-
-              </div>
-
-    
-
-              {/* Weekly Calendar Grid - Columnar View */}
-
-              <div className="flex-1 overflow-x-auto">
-
-                <div className="grid grid-cols-6 gap-1 min-w-[768px] border-collapse">
-
-                  {/* Corner spacer */}
-
-                  <div className="col-span-1"></div>
-
-                  {/* Weekday Headers */}
-
-                  {weekdays.map(day => (
-
-                    <div key={day.toString()} className="text-center font-bold text-gray-600 bg-gray-100 rounded-t-lg p-2">
-
-                      <div className="text-sm">{day.toLocaleString('default', { weekday: 'short' })}</div>
-
-                      <div className="text-xl">{day.getDate()}</div>
-
-                    </div>
-
-                  ))}
-
-    
-
-                  {/* Class Rows */}
-
-                  {classes.map(c => (
-
-                    <React.Fragment key={c}>
-
-                      {/* Class row header */}
-
-                      <div className={`p-2 font-semibold text-white bg-gray-700 rounded-bl-lg flex items-center justify-center ${classColors[c]} text-center`}>
-
-                        {c}
-
-                      </div>
-
-                      {/* Daily cells for each class */}
-
-                      {weekdays.map(day => {
-
-                        const dayActivities = activities.filter(act =>
-
-                          act.date === day.toISOString().split('T')[0] && act.class === c
-
-                        );
-
-                        const formattedDate = day.toISOString().split('T')[0];
-
-                        const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
-
-        
-
-                        return (
-
-                          <div
-
-                            key={`${formattedDate}-${c}`}
-
-                            className={`p-2 min-h-[120px] rounded-lg transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-indigo-200' : ''}`}
-
-                            onDragOver={(e) => handleDragOver(e, day, c)}
-
-                            onDragLeave={handleDragLeave}
-
-                            onDrop={(e) => handleDrop(e, day, c)}
-
-                          >
-
-                            <div className="space-y-1">
-
-                              {dayActivities.map(activity => (
-
-                                <div
-
-                                  key={activity.id}
-
-                                  className={`p-1 text-xs rounded-lg text-white cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
-
-                                  onClick={() => openModal(activity)}
-
-                                  draggable
-
-                                  onDragStart={(e) => handleDragStart(e, activity)}
-
-                                >
-
-                                  {activity.title}
-
-                                </div>
-
-                              ))}
-
-                            </div>
-
-                          </div>
-
-                        );
-
-                      })}
-
-                    </React.Fragment>
-
-                  ))}
-
-                </div>
-
-              </div>
-
-            </div>
-
-          </div>
-
-          {isModalOpen && <ActivityModal />}
-
-          {message && <MessageBox message={message} onClose={() => setMessage('')} />}
-
-          {confirmDelete && <ConfirmationBox
-
-            message={selectedActivity.date ? "Are you sure you want to unschedule this activity?" : "Are you sure you want to permanently delete this activity?"}
-
-            onConfirm={selectedActivity.date ? () => handleUnschedule(confirmDelete) : () => handlePermanentDelete(confirmDelete)}
-
-            onCancel={() => setConfirmDelete(null)}
-
-          />}
-
-        </div>
-
-      );
-
-    }
-
-    
-
-    // Login screen component
-
-    function LoginScreen({ onSignIn, onMessageBox }) {
-
-      return (
-
-        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 p-4">
-
-          <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm text-center">
-
-            <h2 className="text-2xl font-bold mb-4 text-gray-800">Welcome to the 8th Grade Tracker</h2>
-
-            <p className="text-gray-600 mb-6">Please sign in with your Google account to access your calendar.</p>
-
-            <button
-
-              onClick={onSignIn}
-
-              className="px-6 py-3 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md"
-
-            >
-
-              Sign In with Google
-
-            </button>
-
-          </div>
-
-        </div>
-
-      );
-
-    }
-
-    
-
-    // Main wrapper component to handle authentication state
-
-    function AppWrapper() {
-
-      const [user, setUser] = React.useState(null);
-
-      const [loading, setLoading] = React.useState(true);
-
-      const [message, setMessage] = React.useState('');
-
-      
-
-      // Firebase credentials
-
-      const firebaseConfig = {
-
-        apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64',
-
-        authDomain: 'th-grade-tracker.firebaseapp.com', 
-
-      };
-
-
-
-      // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
-
-      const authorizedEmails = [
-
-        'ssarmiento@craighouse.cl',
-
-      ].map(email => email.toLowerCase().trim()); // Normalizar a minúsculas y quitar espacios
-
-
-
-      React.useEffect(() => {
-
-        if (!firebaseConfig.apiKey) {
-
-          setMessage('Error de configuración: La clave de API de Firebase está vacía.');
-
-          setLoading(false);
-
-          return;
-
-        }
-
-
-
-        try {
-
-          if (!firebase.apps.length) {
-
-            firebase.initializeApp(firebaseConfig);
-
-          }
-
-        } catch (e) {
-
-          console.error("Error al inicializar Firebase:", e);
-
-          setMessage(`Error al inicializar Firebase: ${e.message}`);
-
-          setLoading(false);
-
-          return;
-
-        }
-
-
-
-        const auth = firebase.auth();
-
-        const unsubscribe = auth.onAuthStateChanged((user) => {
-
-          setLoading(false);
-
-          if (user) {
-
-            const userEmail = user.email.toLowerCase().trim();
-
-            console.log("Correo electrónico recibido de Firebase:", userEmail);
-
-            console.log("Correos electrónicos autorizados:", authorizedEmails);
-
-
-
-            if (authorizedEmails.includes(userEmail)) {
-
-              setUser(user);
-
-              console.log("Usuario autorizado. Acceso concedido.");
-
-            } else {
-
-              setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
-
-              auth.signOut();
-
-              console.log("Usuario no autorizado. Acceso denegado y se cierra la sesión.");
-
-            }
-
-          } else {
-
-            setUser(null);
-
-          }
-
-        });
-
-
-
-        return () => unsubscribe();
-
-      }, []);
-
-
-
-      const handleSignIn = async () => {
-
-        const provider = new firebase.auth.GoogleAuthProvider();
-
-        try {
-
-          const result = await firebase.auth().signInWithPopup(provider);
-
-          const userEmail = result.user.email.toLowerCase().trim();
-
-          
-
-          if (authorizedEmails.includes(userEmail)) {
-
-            setUser(result.user);
-
-            console.log("Login exitoso. El estado del usuario se ha actualizado directamente.");
-
-          } else {
-
-            setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
-
-            firebase.auth().signOut();
-
-          }
-
-        } catch (error) {
-
-          setMessage(`Error durante el inicio de sesión: ${error.message}`);
-
-          console.error(error);
-
-        }
-
-      };
-
-
-
-      const handleSignOut = async () => {
-
-        try {
-
-          await firebase.auth().signOut();
-
-        } catch (error) {
-
-          setMessage(`Error durante el cierre de sesión: ${error.message}`);
-
-          console.error(error);
-
-        }
-
-      };
-
-
-
-      return (
-
-        <React.Fragment>
-
-          {user ? (
-
-            <App user={user} onSignOut={handleSignOut} />
-
-          ) : (
-
-            <LoginScreen onSignIn={handleSignIn} />
-
-          )}
-
-          {message && <MessageBox message={message} onClose={() => setMessage('')} />}
-
-        </React.Fragment>
-
-      );
-
-    }
-
-
-
-    const root = ReactDOM.createRoot(document.getElementById('root'));
-
-    root.render(<AppWrapper />);
-
+    'use strict';
+    
+    // Global variables provided by the Canvas environment for Firebase setup
+    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+    const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+    // Custom message box to replace window.alert()
+    function MessageBox({ message, onClose }) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <p className="text-gray-800 mb-4">{message}</p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // Custom confirmation box to replace window.confirm()
+    function ConfirmationBox({ message, onConfirm, onCancel }) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <p className="text-gray-800 mb-4">{message}</p>
+            <div className="flex justify-center space-x-4">
+              <button
+                onClick={onCancel}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Main application component
+    function App({ user, onSignOut }) {
+      const classes = ['8A1', '8A2', '8R1', '8R2', '8R3', '8R4'];
+      const classColors = {
+        '8A1': 'bg-[#FF6B6B]', // Bright Red
+        '8A2': 'bg-[#FFB347]', // Bright Orange
+        '8R1': 'bg-[#F2D735]', // A more visible yellow
+        '8R2': 'bg-[#77DD77]', // Bright Green
+        '8R3': 'bg-[#64B5F6]', // Bright Blue
+        '8R4': 'bg-[#9575CD]', // Bright Purple
+      };
+      
+      const authorizedHolidayManager = 'ssarmiento@craighouse.cl';
+      const isHolidayManager = user.email === authorizedHolidayManager;
+    
+      const [currentWeekStart, setCurrentWeekStart] = React.useState(() => {
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const startOfWeek = new Date(today.setDate(diff));
+        return startOfWeek;
+      });
+      const [scheduledActivities, setScheduledActivities] = React.useState([]);
+      const [activityTemplates, setActivityTemplates] = React.useState([]);
+      const [holidays, setHolidays] = React.useState([]);
+      const [selectedUnit, setSelectedUnit] = React.useState('All');
+      const [selectedActivity, setSelectedActivity] = React.useState(null);
+      const [selectedHoliday, setSelectedHoliday] = React.useState(null);
+      const [isActivityModalOpen, setIsActivityModalOpen] = React.useState(false);
+      const [isHolidayModalOpen, setIsHolidayModalOpen] = React.useState(false);
+      const [draggedOverCell, setDraggedOverCell] = React.useState(null);
+      const [message, setMessage] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
+      const [confirmDelete, setConfirmDelete] = React.useState(null);
+    
+      // Firestore connections
+      const db = firebase.firestore();
+      const userUID = user.uid;
+      const templatesRef = db.collection('activity_templates');
+      const scheduledRef = db.collection('scheduled_activities');
+      const holidaysRef = db.collection('holidays');
+
+      const getWeekdays = (startDate) => {
+        const weekdays = [];
+        for (let i = 0; i < 5; i++) {
+          const day = new Date(startDate);
+          day.setDate(startDate.getDate() + i);
+          weekdays.push(day);
+        }
+        return weekdays;
+      };
+      
+      const weekdays = getWeekdays(currentWeekStart);
+      
+      const fetchData = async () => {
+        try {
+            console.log('Fetching all data from Firestore...');
+            const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot] = await Promise.all([
+                templatesRef.get(),
+                scheduledRef.get(),
+                holidaysRef.get(),
+            ]);
+
+            const fetchedTemplates = templatesSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedScheduled = scheduledSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedHolidays = holidaysSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+
+            setActivityTemplates(fetchedTemplates);
+            setScheduledActivities(fetchedScheduled);
+            setHolidays(fetchedHolidays);
+            console.log('All state updated.');
+        } catch (error) {
+            setMessage(`Error fetching data: ${error.message}`);
+            console.error("Error fetching data:", error);
+        } finally {
+            setLoading(false);
+        }
+      };
+      
+      React.useEffect(() => {
+        console.log('useEffect triggered for fetching data.');
+        fetchData();
+      }, []);
+    
+      const handlePreviousWeek = () => {
+        setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() - 7));
+      };
+      const handleNextWeek = () => {
+        setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + 7));
+      };
+    
+      const openActivityModal = (activity = null, isScheduled = false) => {
+        setSelectedActivity({ ...activity, isScheduled });
+        setIsActivityModalOpen(true);
+      };
+      const closeActivityModal = () => {
+        setIsActivityModalOpen(false);
+        setSelectedActivity(null);
+      };
+
+      const openHolidayModal = (holiday = null) => {
+        setSelectedHoliday(holiday);
+        setIsHolidayModalOpen(true);
+      };
+      const closeHolidayModal = () => {
+        setIsHolidayModalOpen(false);
+        setSelectedHoliday(null);
+      };
+    
+      const handleSave = async (activityData, isScheduled) => {
+        try {
+            if (isScheduled) {
+                await scheduledRef.doc(activityData.id).update({
+                    "title": activityData.title,
+                    "description": activityData.description,
+                    "unit": activityData.unit,
+                    "class": activityData.class,
+                    "date": activityData.date,
+                    "templateId": activityData.templateId
+                });
+            } else {
+                if (activityData.id) {
+                    await templatesRef.doc(activityData.id).update({
+                        "title": activityData.title,
+                        "description": activityData.description,
+                        "unit": activityData.unit
+                    });
+                } else {
+                    await templatesRef.add({
+                        "title": activityData.title,
+                        "description": activityData.description,
+                        "unit": activityData.unit,
+                        "userId": userUID // Add userId for future potential rules
+                    });
+                }
+            }
+            fetchData();
+        } catch (error) {
+            setMessage(`Error saving activity: ${error.message}`);
+            console.error(error);
+        }
+        closeActivityModal();
+      };
+      
+      const handleSaveHoliday = async (holidayData) => {
+        try {
+            if (holidayData.id) {
+                await holidaysRef.doc(holidayData.id).update({
+                    "name": holidayData.name,
+                    "startDate": holidayData.startDate,
+                    "endDate": holidayData.endDate,
+                });
+            } else {
+                await holidaysRef.add({
+                    "name": holidayData.name,
+                    "startDate": holidayData.startDate,
+                    "endDate": holidayData.endDate,
+                    "userId": userUID
+                });
+            }
+            fetchData();
+        } catch (error) {
+            setMessage(`Error saving holiday: ${error.message}`);
+            console.error(error);
+        }
+        closeHolidayModal();
+      };
+
+      const handleDeleteHoliday = async (holidayId) => {
+          try {
+            await holidaysRef.doc(holidayId).delete();
+            fetchData();
+          } catch (error) {
+            setMessage(`Error deleting holiday: ${error.message}`);
+            console.error(error);
+          }
+          setConfirmDelete(null);
+          closeHolidayModal();
+      };
+      
+      const handleDeleteScheduled = async (scheduledId) => {
+          try {
+            await scheduledRef.doc(scheduledId).delete();
+            fetchData();
+          } catch (error) {
+            setMessage(`Error deleting scheduled activity: ${error.message}`);
+            console.error(error);
+          }
+          setConfirmDelete(null);
+          closeActivityModal();
+      };
+
+      const handleDeleteTemplate = async (templateId) => {
+          try {
+              const batch = db.batch();
+              const scheduledInstances = await scheduledRef.where('templateId', '==', templateId).get();
+              scheduledInstances.docs.forEach(doc => {
+                  batch.delete(doc.ref);
+              });
+              batch.delete(templatesRef.doc(templateId));
+              await batch.commit();
+              fetchData();
+          } catch (error) {
+              setMessage(`Error deleting template: ${error.message}`);
+              console.error(error);
+          }
+          setConfirmDelete(null);
+          closeActivityModal();
+      };
+    
+      const handleDragStart = (e, activity) => {
+        e.dataTransfer.setData("templateId", activity.id);
+      };
+    
+      const handleDragOver = (e, date, className) => {
+        e.preventDefault();
+        setDraggedOverCell({ date: date.toISOString().split('T')[0], className });
+      };
+    
+      const handleDragLeave = () => {
+        setDraggedOverCell(null);
+      };
+    
+      const handleDrop = async (e, newDate, newClass) => {
+        e.preventDefault();
+        const templateId = e.dataTransfer.getData("templateId");
+        const template = activityTemplates.find(t => t.id === templateId);
+        
+        const holidayForDay = getHolidayForDay(newDate);
+        if (holidayForDay) {
+            setMessage('Cannot schedule an activity on a holiday.');
+            setDraggedOverCell(null);
+            return;
+        }
+
+        if (template) {
+            const unitNumber = template.unit ? template.unit.split(' ')[1] : '';
+            const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+            const titleWithoutPrefix = template.title.startsWith(unitPrefix)
+              ? template.title.substring(unitPrefix.length)
+              : template.title;
+
+            const scheduledData = {
+              "templateId": template.id,
+              "title": `${unitPrefix}${titleWithoutPrefix}`,
+              "description": template.description,
+              "unit": template.unit,
+              "date": newDate.toISOString().split('T')[0],
+              "class": newClass,
+              "userId": userUID // Add userId for future potential rules
+            };
+            
+            try {
+                await scheduledRef.add(scheduledData);
+                fetchData();
+            } catch (error) {
+                setMessage(`Error scheduling activity: ${error.message}`);
+                console.error(error);
+            }
+        }
+        setDraggedOverCell(null);
+      };
+      
+      const handleUnscheduledDrop = async (e) => {
+        e.preventDefault();
+      };
+    
+      const ActivityModal = () => {
+        const [formData, setFormData] = React.useState(
+          selectedActivity ? {
+            title: selectedActivity.title,
+            class: selectedActivity.class,
+            date: selectedActivity.date,
+            description: selectedActivity.description,
+            unit: selectedActivity.unit,
+            id: selectedActivity.id
+          } : {
+            title: '',
+            class: null,
+            date: null,
+            description: '',
+            unit: 'Unit 1'
+          }
+        );
+    
+        const handleChange = (e) => {
+          const { name, value } = e.target;
+          setFormData({ ...formData, [name]: value });
+        };
+        
+        const isScheduled = selectedActivity && selectedActivity.isScheduled;
+        const deleteButtonText = isScheduled ? 'Delete Instance' : 'Delete All';
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+            <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-800">{isScheduled ? 'Edit Scheduled Activity' : 'Add/Edit Unscheduled Activity'}</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Title</label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Unit</label>
+                  <select
+                    name="unit"
+                    value={formData.unit || ''}
+                    onChange={handleChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="All">All Units</option>
+                    {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                {isScheduled && (
+                  <React.Fragment>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Class</label>
+                      <select
+                        name="class"
+                        value={formData.class || ''}
+                        onChange={handleChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      >
+                        <option value="">Unscheduled</option>
+                        {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Date</label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={formData.date || ''}
+                        onChange={handleChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </React.Fragment>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    rows="3"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  ></textarea>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                {selectedActivity.id && (
+                  <button
+                    onClick={() => setConfirmDelete(selectedActivity.id)}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                  >
+                    {deleteButtonText}
+                  </button>
+                )}
+                <button
+                  onClick={closeActivityModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSave(formData, isScheduled)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const HolidayModal = () => {
+        const [formData, setFormData] = React.useState(
+            selectedHoliday ? { ...selectedHoliday } : {
+                name: '',
+                startDate: '',
+                endDate: '',
+            }
+        );
+
+        const handleChange = (e) => {
+            const { name, value } = e.target;
+            setFormData({ ...formData, [name]: value });
+        };
+        
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+              <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+                  <h2 className="text-xl font-bold mb-4 text-gray-800">{selectedHoliday ? 'Edit Holiday/Vacation' : 'Add Holiday/Vacation'}</h2>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">Name</label>
+                          <input type="text" name="name" value={formData.name} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                          <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">End Date</label>
+                          <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                      </div>
+                      {selectedHoliday && (
+                        <div className="max-h-48 overflow-y-auto border border-gray-200 rounded-md p-2">
+                            <h3 className="text-sm font-semibold mb-2 text-gray-700">Scheduled Activities on this Holiday:</h3>
+                            {scheduledActivities.filter(sa => sa.date >= formData.startDate && sa.date <= formData.endDate).length > 0 ? (
+                                scheduledActivities.filter(sa => sa.date >= formData.startDate && sa.date <= formData.endDate).map(sa => (
+                                    <div key={sa.id} className="p-2 bg-gray-100 rounded-md text-sm mb-1">
+                                        {sa.title} ({sa.class})
+                                    </div>
+                                ))
+                            ) : (
+                                <p className="text-xs text-gray-500">No activities scheduled on these dates.</p>
+                            )}
+                        </div>
+                      )}
+                  </div>
+                  <div className="mt-6 flex justify-end space-x-3">
+                    {selectedHoliday && (
+                      <button
+                        onClick={() => setConfirmDelete(selectedHoliday.id)}
+                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    <button
+                      onClick={closeHolidayModal}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleSaveHoliday(formData)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                  </div>
+              </div>
+          </div>
+        );
+      };
+    
+      if (loading) {
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-2">Cargando actividades...</h2>
+              <p className="text-gray-600">Conectando a Firebase.</p>
+            </div>
+          </div>
+        );
+      }
+      
+      const getHolidayForDay = (day) => {
+        const dayDate = day.toISOString().split('T')[0];
+        const foundHoliday = holidays.find(h => {
+          return dayDate >= h.startDate && dayDate <= h.endDate;
+        });
+        return foundHoliday || null;
+      };
+
+      return (
+        <div className="font-sans antialiased text-gray-800 bg-[#F8F8F8] min-h-screen p-4 flex flex-col">
+          {/* Main Header (Title and User Actions) */}
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex-1 text-center">
+              <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
+            </div>
+            <div className="flex flex-col items-end space-y-2">
+                <div className="flex items-center space-x-4">
+                    <span className="text-sm font-medium text-gray-600">{user.email}</span>
+                    <button
+                      onClick={onSignOut}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                    >
+                      Sign Out
+                    </button>
+                </div>
+                {isHolidayManager && (
+                  <button
+                      onClick={() => openHolidayModal()}
+                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+                  >
+                      Manage Holidays
+                  </button>
+                )}
+            </div>
+          </div>
+          <div className="flex-1 bg-white rounded-xl shadow-md p-4 lg:p-6 overflow-x-auto">
+            {/* Main Content Area */}
+            <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4">
+              {/* Unscheduled Activities List */}
+              <div
+                className="w-full lg:w-1/4 p-4 bg-gray-100 rounded-xl shadow-inner min-h-[200px]"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleUnscheduledDrop}
+              >
+                <h3 className="text-lg font-bold mb-2 text-center text-white bg-gray-800 rounded-md p-2 -m-2 mb-2">Unscheduled Activities</h3>
+                <div className="text-center">
+                  <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 mb-4">
+                    Add Activity
+                  </button>
+                </div>
+                {/* Unit filter dropdown */}
+                <div className="mb-4">
+                  <label htmlFor="unit-filter" className="sr-only">Filter by Unit</label>
+                  <select
+                    id="unit-filter"
+                    value={selectedUnit}
+                    onChange={(e) => setSelectedUnit(e.target.value)}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="All">All Units</option>
+                    {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  {activityTemplates
+                    .filter(template => selectedUnit === 'All' || template.unit === selectedUnit)
+                    .map(template => (
+                      <div
+                        key={template.id}
+                        className={`p-2 text-sm text-gray-800 cursor-pointer bg-white rounded-md shadow-sm hover:shadow-md border border-gray-200`}
+                        onClick={() => openActivityModal(template)}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, template)}
+                      >
+                        {template.title}
+                      </div>
+                    ))}
+                </div>
+              </div>
+    
+              {/* Weekly Calendar Grid - Columnar View */}
+              <div className="flex-1 overflow-x-auto">
+                {/* Calendar Header with Navigation */}
+                <div className="flex justify-center items-center mb-4">
+                    <h2 className="text-xl font-bold md:text-2xl mr-4 text-gray-600">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                    <div className="flex space-x-2">
+                      <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                      </button>
+                      <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-8h2v-4h-2v4zm1-6a1 1 0 100 2 1 1 0 000-2z" /></svg>
+                      </button>
+                      <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                      </button>
+                    </div>
+                </div>
+                <div className="grid grid-cols-6 gap-1 min-w-[768px] border-collapse">
+                    {/* Corner spacer */}
+                    <div className="col-span-1"></div>
+                    {/* Weekday Headers */}
+                    {weekdays.map(day => (
+                      <div key={day.toString()} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md shadow-sm p-2 border-b border-gray-300">
+                          <div className="text-sm">{day.toLocaleString('default', { weekday: 'short' })}</div>
+                          <div className="text-xl">{day.getDate()}</div>
+                      </div>
+                    ))}
+    
+                    {/* Class Rows */}
+                    {classes.map(c => (
+                      <React.Fragment key={c}>
+                          {/* Class row header */}
+                          <div className={`p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300`}>
+                            {c}
+                          </div>
+                          {/* Daily cells for each class */}
+                          {weekdays.map(day => {
+                            const dayActivities = scheduledActivities.filter(act =>
+                              act.date === day.toISOString().split('T')[0] && act.class === c
+                            );
+                            const formattedDate = day.toISOString().split('T')[0];
+                            const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
+                            const holiday = getHolidayForDay(day);
+                            const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'} ${holiday ? 'bg-purple-100 cursor-pointer' : ''}`;
+    
+                            return (
+                              <div
+                                key={`${formattedDate}-${c}`}
+                                className={cellClasses}
+                                onDragOver={(e) => handleDragOver(e, day, c)}
+                                onDragLeave={handleDragLeave}
+                                onDrop={(e) => handleDrop(e, day, c)}
+                                onClick={() => { if (holiday && isHolidayManager) openHolidayModal(holiday); }}
+                              >
+                                  <div className="space-y-1">
+                                    {holiday ? (
+                                      <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
+                                    ) : (
+                                      dayActivities.map(activity => (
+                                        <div
+                                          key={activity.id}
+                                          className={`p-1 text-sm text-white rounded-md cursor-pointer ${classColors[activity.class]}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation(); // Prevent modal from closing when clicking on an activity
+                                            openActivityModal(activity, true);
+                                          }}
+                                        >
+                                          {activity.title}
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                              </div>
+                            );
+                          })}
+                      </React.Fragment>
+                    ))}
+                </div>
+              </div>
+            </div>
+          </div>
+          {isActivityModalOpen && <ActivityModal />}
+          {isHolidayModalOpen && <HolidayModal />}
+          {confirmDelete && (
+              <ConfirmationBox
+                  message="Are you sure you want to delete this item? This action cannot be undone."
+                  onConfirm={() => {
+                      if (selectedHoliday) {
+                          handleDeleteHoliday(selectedHoliday.id);
+                      } else if (selectedActivity.isScheduled) {
+                          handleDeleteScheduled(selectedActivity.id);
+                      } else {
+                          handleDeleteTemplate(selectedActivity.id);
+                      }
+                  }}
+                  onCancel={() => setConfirmDelete(null)}
+              />
+          )}
+          {message && <MessageBox message={message} onClose={() => setMessage('')} />}
+        </div>
+      );
+    }
+    
+    // Main component to handle Firebase auth state
+    function Main() {
+        const [user, setUser] = React.useState(null);
+        const [authLoading, setAuthLoading] = React.useState(true);
+    
+        React.useEffect(() => {
+            if (!firebaseConfig) {
+                console.error("Firebase config is missing.");
+                return;
+            }
+            try {
+                // Initialize Firebase App
+                const app = firebase.initializeApp(firebaseConfig);
+                const auth = firebase.auth();
+                const db = firebase.firestore();
+    
+                // Listen for auth state changes
+                const unsubscribe = auth.onAuthStateChanged(async (currentUser) => {
+                    if (currentUser) {
+                        setUser(currentUser);
+                    } else {
+                        // Sign in with custom token if available, otherwise anonymously
+                        try {
+                            if (initialAuthToken) {
+                                await auth.signInWithCustomToken(initialAuthToken);
+                            } else {
+                                await auth.signInAnonymously();
+                            }
+                        } catch (error) {
+                            console.error("Authentication failed:", error);
+                        }
+                    }
+                    setAuthLoading(false);
+                });
+    
+                return () => unsubscribe();
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                setAuthLoading(false);
+            }
+        }, []);
+    
+        const handleSignOut = async () => {
+            const auth = firebase.auth();
+            try {
+                await auth.signOut();
+                setUser(null);
+            } catch (error) {
+                console.error("Sign out failed:", error);
+            }
+        };
+    
+        if (authLoading) {
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
+                    <div className="text-center">
+                        <h2 className="text-2xl font-bold mb-2">Authenticating...</h2>
+                        <p className="text-gray-600">Please wait while we connect.</p>
+                    </div>
+                </div>
+            );
+        }
+    
+        if (!user) {
+            // This case should ideally not be reached due to auto sign-in logic
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
+                    <div className="text-center">
+                        <h2 className="text-2xl font-bold mb-2">Authentication Required</h2>
+                        <p className="text-gray-600">Please refresh to sign in.</p>
+                    </div>
+                </div>
+            );
+        }
+    
+        return <App user={user} onSignOut={handleSignOut} />;
+    }
+    
+    // Render the main component
+    ReactDOM.render(<Main />, document.getElementById('root'));
 </script>
 
-
-
 </body>
-
 </html>

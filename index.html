@@ -574,10 +574,12 @@
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleUnscheduledDrop}
               >
-                <h3 className="text-lg font-bold mb-2">Unscheduled Activities</h3>
-                <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 mb-4">
-                  Add Activity
-                </button>
+                <h3 className="text-lg font-bold mb-2 text-center">Unscheduled Activities</h3>
+                <div className="text-center">
+                  <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 mb-4">
+                    Add Activity
+                  </button>
+                </div>
                 {/* Unit filter dropdown */}
                 <div className="mb-4">
                   <label htmlFor="unit-filter" className="sr-only">Filter by Unit</label>

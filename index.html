@@ -100,10 +100,21 @@
       const [loading, setLoading] = React.useState(true);
       const [confirmDelete, setConfirmDelete] = React.useState(null);
     
-      // PEGA TUS CLAVES DE AIRTABLE AQUÍ. Reemplaza los valores de cadena vacía con tus claves reales.
+      // Airtable credentials
       const airtableApiKey = 'patzTVC41MYMxkUm1.f4c584862b75d18574ccf702aceec889293150452fbddca1af88fc5acd628244';
       const airtableBaseId = 'app1ZWNrSqzTWUYPR';
-      const base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
+      const airtableTableName = 'Activities'; // Esta es la tabla que usará la aplicación.
+      
+      let base;
+      try {
+        console.log(`Intentando conectar con Airtable. Base ID: ${airtableBaseId}, API Key: ${airtableApiKey}`);
+        base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
+      } catch (e) {
+        setMessage(`Error al inicializar Airtable. Esto podría deberse a credenciales incorrectas. Verifique su API Key y Base ID.`);
+        console.error("Error initializing Airtable:", e);
+        // We set loading to false so the user can see the message.
+        if (loading) setLoading(false);
+      }
 
       const getWeekdays = (startDate) => {
         const weekdays = [];
@@ -120,13 +131,13 @@
       const fetchActivities = async () => {
         setLoading(true);
         try {
-          if (!airtableApiKey || !airtableBaseId) {
-            setMessage('Error de configuración: La clave de API de Airtable o el ID de la base de datos están vacíos.');
+          if (!base) {
+            setMessage('Error de configuración: No se pudo inicializar la conexión con Airtable.');
             setLoading(false);
             return;
           }
 
-          const records = await base('Activities').select({
+          const records = await base(airtableTableName).select({
             view: "Grid view"
           }).all();
 
@@ -146,7 +157,7 @@
           setUnscheduledActivities(unscheduled);
           setMessage('Activities loaded successfully!');
         } catch (error) {
-          setMessage(`Error fetching activities: ${error.message}. Asegúrese de que sus credenciales de Airtable sean correctas y que la tabla 'Activities' exista.`);
+          setMessage(`Error fetching activities: ${error.message}. Asegúrese de que sus credenciales de Airtable sean correctas y que la tabla '${airtableTableName}' exista.`);
           console.error(error);
         } finally {
           setLoading(false);
@@ -176,7 +187,7 @@
       const handleSave = async (activityData) => {
         try {
           if (activityData.id) {
-            await base('Activities').update(activityData.id, {
+            await base(airtableTableName).update(activityData.id, {
               "Title": activityData.title,
               "Description": activityData.description,
               "Unit": activityData.unit,
@@ -184,7 +195,7 @@
               "Date": activityData.date
             });
           } else {
-            await base('Activities').create({
+            await base(airtableTableName).create({
               "Title": activityData.title,
               "Description": activityData.description,
               "Unit": activityData.unit,
@@ -203,7 +214,7 @@
     
       const handleDelete = async (activityId) => {
           try {
-            await base('Activities').destroy(activityId);
+            await base(airtableTableName).destroy(activityId);
             setMessage('Activity deleted successfully!');
             fetchActivities(); // Refresh data from Airtable
           } catch (error) {
@@ -247,7 +258,7 @@
           };
 
           try {
-            await base('Activities').update(activityToUpdate.id, {
+            await base(airtableTableName).update(activityToUpdate.id, {
               "Title": updatedActivityData.title,
               "Date": updatedActivityData.date,
               "Class": updatedActivityData.class
@@ -269,7 +280,7 @@
     
         if (activityToUpdate) {
           try {
-            await base('Activities').update(activityToUpdate.id, {
+            await base(airtableTableName).update(activityToUpdate.id, {
               "Date": null,
               "Class": null
             });
@@ -573,7 +584,7 @@
       const [loading, setLoading] = React.useState(true);
       const [message, setMessage] = React.useState('');
       
-      // PEGA TUS CLAVES DE FIREBASE AQUÍ. Reemplaza los valores de cadena vacía con tus claves reales.
+      // Firebase credentials
       const firebaseConfig = {
         apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64',
         authDomain: 'th-grade-tracker.firebaseapp.com',
@@ -582,6 +593,13 @@
         messagingSenderId: '728386315853',
         appId: '1:728386315853:web:738bc67430ccbae0e69e04'
       };
+
+      // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
+      // Reemplaza los correos de ejemplo con los que desees autorizar.
+      const authorizedEmails = [
+        'ssarmiento@craighouse.cl',
+        'otro.correo@ejemplo.com',
+      ];
 
       React.useEffect(() => {
         if (!firebaseConfig.apiKey) {
@@ -604,7 +622,14 @@
         const auth = firebase.auth();
         const unsubscribe = auth.onAuthStateChanged((user) => {
           if (user) {
-            setUser(user);
+            // Verifica si el correo electrónico del usuario está en la lista de autorizados
+            if (authorizedEmails.includes(user.email)) {
+              setUser(user);
+            } else {
+              // Si el correo no está autorizado, cierra la sesión y muestra un mensaje
+              setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
+              auth.signOut();
+            }
           } else {
             setUser(null);
           }

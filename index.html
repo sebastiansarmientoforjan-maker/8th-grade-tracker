@@ -200,20 +200,23 @@
                     "unit": activityData.unit,
                     "class": activityData.class,
                     "date": activityData.date,
-                    "templateId": activityData.templateId
+                    "templateId": activityData.templateId,
+                    "classType": activityData.classType
                 });
             } else {
                 if (activityData.id) {
                     await templatesRef.doc(activityData.id).update({
                         "title": activityData.title,
                         "description": activityData.description,
-                        "unit": activityData.unit
+                        "unit": activityData.unit,
+                        "classType": activityData.classType
                     });
                 } else {
                     await templatesRef.add({
                         "title": activityData.title,
                         "description": activityData.description,
                         "unit": activityData.unit,
+                        "classType": activityData.classType,
                         "userId": userUID // Add userId for future potential rules
                     });
                 }
@@ -320,17 +323,12 @@
         }
 
         if (template) {
-            const unitNumber = template.unit ? template.unit.split(' ')[1] : '';
-            const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-            const titleWithoutPrefix = template.title.startsWith(unitPrefix)
-              ? template.title.substring(unitPrefix.length)
-              : template.title;
-
             const scheduledData = {
               "templateId": template.id,
-              "title": `${unitPrefix}${titleWithoutPrefix}`,
+              "title": template.title,
               "description": template.description,
               "unit": template.unit,
+              "classType": template.classType,
               "date": newDate.toISOString().split('T')[0],
               "class": newClass,
               "userId": userUID // Add userId for future potential rules
@@ -359,13 +357,15 @@
             date: selectedActivity.date,
             description: selectedActivity.description,
             unit: selectedActivity.unit,
+            classType: selectedActivity.classType || 'Standard',
             id: selectedActivity.id
           } : {
             title: '',
             class: null,
             date: null,
             description: '',
-            unit: 'Unit 1'
+            unit: 'Unit 1',
+            classType: 'Standard'
           }
         );
     
@@ -402,6 +402,18 @@
                   >
                     <option value="All">All Units</option>
                     {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Class Type</label>
+                  <select
+                    name="classType"
+                    value={formData.classType || ''}
+                    onChange={handleChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="Advanced">Advanced</option>
+                    <option value="Standard">Standard</option>
                   </select>
                 </div>
                 {isScheduled && (
@@ -724,15 +736,22 @@
                               {holiday ? (
                                 <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
                               ) : (
-                                dayActivities.map(activity => (
+                                dayActivities.map(activity => {
+                                  let unitPrefix = '';
+                                  if (activity.unit) {
+                                      const unitNumber = activity.unit.split(' ')[1];
+                                      unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+                                  }
+                                  const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
+                                  return (
                                   <div
                                     key={activity.id}
                                     className={`p-1 text-xs text-white rounded-md shadow-sm cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
                                     onClick={(e) => { e.stopPropagation(); openActivityModal(activity, true); }}
                                   >
-                                    {activity.title}
+                                    {classTypePrefix}{unitPrefix}{activity.title}
                                   </div>
-                                ))
+                                )})
                               )}
                             </div>
                           </div>

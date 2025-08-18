@@ -90,9 +90,12 @@
       });
       const [activities, setActivities] = React.useState([]);
       const [unscheduledActivities, setUnscheduledActivities] = React.useState([]);
+      const [holidays, setHolidays] = React.useState([]);
       const [selectedUnit, setSelectedUnit] = React.useState('All');
       const [selectedActivity, setSelectedActivity] = React.useState(null);
-      const [isModalOpen, setIsModalOpen] = React.useState(false);
+      const [selectedHoliday, setSelectedHoliday] = React.useState(null);
+      const [isActivityModalOpen, setIsActivityModalOpen] = React.useState(false);
+      const [isHolidayModalOpen, setIsHolidayModalOpen] = React.useState(false);
       const [draggedOverCell, setDraggedOverCell] = React.useState(null);
       const [message, setMessage] = React.useState('');
       const [loading, setLoading] = React.useState(true);
@@ -102,6 +105,7 @@
       const db = firebase.firestore();
       const userUID = user.uid;
       const activitiesRef = db.collection('activities');
+      const holidaysRef = db.collection('holidays');
 
       const getWeekdays = (startDate) => {
         const weekdays = [];
@@ -118,10 +122,15 @@
       const fetchActivities = async () => {
         setLoading(true);
         try {
-            console.log('Fetching activities from Firestore...');
-            const snapshot = await activitiesRef.where('userId', '==', userUID).get();
-            
-            const allActivities = snapshot.docs.map(doc => ({
+            console.log('Fetching activities and holidays from Firestore...');
+            const activitiesSnapshot = await activitiesRef.where('userId', '==', userUID).get();
+            const holidaysSnapshot = await holidaysRef.where('userId', '==', userUID).get();
+
+            const allActivities = activitiesSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedHolidays = holidaysSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
@@ -131,18 +140,19 @@
 
             setActivities(scheduled);
             setUnscheduledActivities(unscheduled);
-            setMessage('Activities loaded successfully!');
-            console.log('Activities and unscheduled activities state updated.');
+            setHolidays(fetchedHolidays);
+            setMessage('Data loaded successfully!');
+            console.log('Activities, unscheduled activities, and holidays state updated.');
         } catch (error) {
-            setMessage(`Error fetching activities: ${error.message}`);
-            console.error("Error fetching activities:", error);
+            setMessage(`Error fetching data: ${error.message}`);
+            console.error("Error fetching data:", error);
         } finally {
             setLoading(false);
         }
       };
       
       React.useEffect(() => {
-        console.log('useEffect triggered for fetching activities.');
+        console.log('useEffect triggered for fetching data.');
         fetchActivities();
       }, []);
     
@@ -153,13 +163,22 @@
         setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + 7));
       };
     
-      const openModal = (activity = null) => {
+      const openActivityModal = (activity = null) => {
         setSelectedActivity(activity);
-        setIsModalOpen(true);
+        setIsActivityModalOpen(true);
       };
-      const closeModal = () => {
-        setIsModalOpen(false);
+      const closeActivityModal = () => {
+        setIsActivityModalOpen(false);
         setSelectedActivity(null);
+      };
+
+      const openHolidayModal = (holiday = null) => {
+        setSelectedHoliday(holiday);
+        setIsHolidayModalOpen(true);
+      };
+      const closeHolidayModal = () => {
+        setIsHolidayModalOpen(false);
+        setSelectedHoliday(null);
       };
     
       const handleSave = async (activityData) => {
@@ -189,7 +208,46 @@
             setMessage(`Error saving activity: ${error.message}`);
             console.error(error);
         }
-        closeModal();
+        closeActivityModal();
+      };
+      
+      const handleSaveHoliday = async (holidayData) => {
+        try {
+            if (holidayData.id) {
+                await holidaysRef.doc(holidayData.id).update({
+                    "name": holidayData.name,
+                    "startDate": holidayData.startDate,
+                    "endDate": holidayData.endDate,
+                });
+                setMessage('Holiday updated successfully!');
+            } else {
+                await holidaysRef.add({
+                    "name": holidayData.name,
+                    "startDate": holidayData.startDate,
+                    "endDate": holidayData.endDate,
+                    "userId": userUID
+                });
+                setMessage('Holiday created successfully!');
+            }
+            fetchActivities();
+        } catch (error) {
+            setMessage(`Error saving holiday: ${error.message}`);
+            console.error(error);
+        }
+        closeHolidayModal();
+      };
+
+      const handleDeleteHoliday = async (holidayId) => {
+          try {
+            await holidaysRef.doc(holidayId).delete();
+            setMessage('Holiday deleted successfully!');
+            fetchActivities();
+          } catch (error) {
+            setMessage(`Error deleting holiday: ${error.message}`);
+            console.error(error);
+          }
+          setConfirmDelete(null);
+          closeHolidayModal();
       };
       
       const handleUnschedule = async (activityId) => {
@@ -204,7 +262,7 @@
           setMessage(`Error unscheduling activity: ${error.message}`);
           console.error(error);
         }
-        closeModal();
+        closeActivityModal();
         setConfirmDelete(null);
       };
       
@@ -217,7 +275,7 @@
             setMessage(`Error deleting activity: ${error.message}`);
             console.error(error);
           }
-          closeModal();
+          closeActivityModal();
           setConfirmDelete(null);
       };
     
@@ -242,6 +300,20 @@
         
         const originalActivity = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
         
+        // Block drop if the day is a holiday
+        const isHoliday = holidays.some(h => {
+          const startDate = new Date(h.startDate);
+          const endDate = new Date(h.endDate);
+          endDate.setDate(endDate.getDate() + 1); // Make it inclusive
+          return newDate >= startDate && newDate <= endDate;
+        });
+
+        if (isHoliday) {
+            setMessage('Cannot schedule an activity on a holiday.');
+            setDraggedOverCell(null);
+            return;
+        }
+
         if (originalActivity) {
             const unitNumber = originalActivity.unit ? originalActivity.unit.split(' ')[1] : '';
             const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
@@ -395,7 +467,7 @@
                   </button>
                 )}
                 <button
-                  onClick={closeModal}
+                  onClick={closeActivityModal}
                   className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
                 >
                   Cancel
@@ -411,6 +483,65 @@
           </div>
         );
       };
+
+      const HolidayModal = () => {
+        const [formData, setFormData] = React.useState(
+            selectedHoliday ? { ...selectedHoliday } : {
+                name: '',
+                startDate: '',
+                endDate: '',
+            }
+        );
+
+        const handleChange = (e) => {
+            const { name, value } = e.target;
+            setFormData({ ...formData, [name]: value });
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+              <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+                  <h2 className="text-xl font-bold mb-4">{selectedHoliday ? 'Edit Holiday/Vacation' : 'Add Holiday/Vacation'}</h2>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">Name</label>
+                          <input type="text" name="name" value={formData.name} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                          <input type="date" name="startDate" value={formData.startDate} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">End Date</label>
+                          <input type="date" name="endDate" value={formData.endDate} onChange={handleChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm" />
+                      </div>
+                  </div>
+                  <div className="mt-6 flex justify-end space-x-3">
+                    {selectedHoliday && (
+                      <button
+                        onClick={() => setConfirmDelete(selectedHoliday.id)}
+                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    <button
+                      onClick={closeHolidayModal}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleSaveHoliday(formData)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                  </div>
+              </div>
+          </div>
+        );
+      };
     
       if (loading) {
         return (
@@ -422,12 +553,25 @@
           </div>
         );
       }
+      
+      const isDayHoliday = (day) => {
+        const dayDate = day.toISOString().split('T')[0];
+        return holidays.some(h => {
+          return dayDate >= h.startDate && dayDate <= h.endDate;
+        });
+      };
 
       return (
         <div className="font-sans antialiased text-gray-800 bg-gray-100 min-h-screen p-4 flex flex-col">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => openHolidayModal()}
+                className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+              >
+                Manage Holidays
+              </button>
               <span className="text-sm font-medium text-gray-600">{user.email}</span>
               <button
                 onClick={onSignOut}
@@ -452,7 +596,7 @@
                   <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
                 </button>
               </div>
-              <button onClick={() => openModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+              <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">
                 Add Activity
               </button>
             </div>
@@ -489,7 +633,7 @@
                       <div
                         key={activity.id}
                         className={`p-2 text-sm rounded-lg text-white cursor-pointer transition-shadow duration-200 bg-gray-400 hover:shadow-md`}
-                        onClick={() => openModal(activity)}
+                        onClick={() => openActivityModal(activity)}
                         draggable
                         onDragStart={(e) => handleDragStart(e, activity)}
                       >
@@ -526,11 +670,12 @@
                         );
                         const formattedDate = day.toISOString().split('T')[0];
                         const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
+                        const holidayClass = isDayHoliday(day) ? 'bg-gray-200' : '';
     
                         return (
                           <div
                             key={`${formattedDate}-${c}`}
-                            className={`p-2 min-h-[120px] rounded-lg transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-indigo-200' : ''}`}
+                            className={`p-2 min-h-[120px] rounded-lg transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-indigo-200' : ''} ${holidayClass}`}
                             onDragOver={(e) => handleDragOver(e, day, c)}
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, day, c)}
@@ -540,7 +685,7 @@
                                 <div
                                   key={activity.id}
                                   className={`p-1 text-xs rounded-lg text-white cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
-                                  onClick={() => openModal(activity)}
+                                  onClick={() => openActivityModal(activity)}
                                   draggable
                                   onDragStart={(e) => handleDragStart(e, activity)}
                                 >
@@ -557,12 +702,18 @@
               </div>
             </div>
           </div>
-          {isModalOpen && <ActivityModal />}
+          {isActivityModalOpen && <ActivityModal />}
+          {isHolidayModalOpen && <HolidayModal />}
           {message && <MessageBox message={message} onClose={() => setMessage('')} />}
-          {confirmDelete && <ConfirmationBox
+          {confirmDelete && selectedActivity && <ConfirmationBox
             message={selectedActivity.date ? "Are you sure you want to unschedule this activity?" : "Are you sure you want to permanently delete this activity?"}
             onConfirm={selectedActivity.date ? () => handleUnschedule(confirmDelete) : () => handlePermanentDelete(confirmDelete)}
             onCancel={() => setConfirmDelete(null)}
+          />}
+          {confirmDelete && selectedHoliday && <ConfirmationBox
+              message="Are you sure you want to delete this holiday?"
+              onConfirm={() => handleDeleteHoliday(confirmDelete)}
+              onCancel={() => setConfirmDelete(null)}
           />}
         </div>
       );

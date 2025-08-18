@@ -587,19 +587,14 @@
       
       // Firebase credentials
       const firebaseConfig = {
-        apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64',
-        authDomain: 'th-grade-tracker.firebaseapp.com',
-        projectId: 'th-grade-tracker',
-        storageBucket: 'th-grade-tracker.firebasestorage.app',
-        messagingSenderId: '728386315853',
-        appId: '1:728386315853:web:738bc67430ccbae0e69e04'
+        // La clave de API es el único dato necesario aquí. El entorno Canvas proporciona los demás automáticamente.
+        apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64'
       };
 
       // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
-      // Reemplaza los correos de ejemplo con los que desees autorizar.
       const authorizedEmails = [
         'ssarmiento@craighouse.cl',
-      ];
+      ].map(email => email.toLowerCase().trim()); // Normalizar a minúsculas y quitar espacios
 
       React.useEffect(() => {
         if (!firebaseConfig.apiKey) {
@@ -609,37 +604,33 @@
         }
 
         try {
-            if (!firebase.apps.length) {
-              firebase.initializeApp(firebaseConfig);
-            }
+          if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+          }
         } catch (e) {
-            console.error("Error initializing Firebase:", e);
-            setMessage(`Error al inicializar Firebase: ${e.message}`);
-            setLoading(false);
-            return;
+          console.error("Error initializing Firebase:", e);
+          setMessage(`Error al inicializar Firebase: ${e.message}`);
+          setLoading(false);
+          return;
         }
 
         const auth = firebase.auth();
-        // Handle the redirect result first
         auth.getRedirectResult().then((result) => {
-            if (result.credential) {
-                // A user successfully signed in via redirect.
-                // The onAuthStateChanged listener will handle the rest.
-                console.log("Redirect sign-in successful:", result.user);
-            }
+          if (result.credential) {
+            console.log("Redirect sign-in successful:", result.user);
+          }
         }).catch((error) => {
-            // Handle errors from the redirect flow
-            setMessage(`Error al iniciar sesión por redirección: ${error.message}`);
-            console.error(error);
+          setMessage(`Error al iniciar sesión por redirección: ${error.message}`);
+          console.error(error);
         });
 
         const unsubscribe = auth.onAuthStateChanged((user) => {
           if (user) {
-            // Verifica si el correo electrónico del usuario está en la lista de autorizados
-            if (authorizedEmails.includes(user.email)) {
+            // Verificar si el correo electrónico del usuario está en la lista de autorizados, normalizando ambos para la comparación
+            const userEmail = user.email.toLowerCase().trim();
+            if (authorizedEmails.includes(userEmail)) {
               setUser(user);
             } else {
-              // Si el correo no está autorizado, cierra la sesión y muestra un mensaje
               setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
               auth.signOut();
             }

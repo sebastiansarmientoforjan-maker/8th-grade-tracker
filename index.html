@@ -75,7 +75,7 @@
       const classColors = {
         '8A1': 'bg-[#FF6B6B]', // Bright Red
         '8A2': 'bg-[#FFB347]', // Bright Orange
-        '8R1': 'bg-[#FFE658]', // Bright Yellow
+        '8R1': 'bg-[#F2D735]', // A more visible yellow
         '8R2': 'bg-[#77DD77]', // Bright Green
         '8R3': 'bg-[#64B5F6]', // Bright Blue
         '8R4': 'bg-[#9575CD]', // Bright Purple
@@ -657,7 +657,7 @@
                         const formattedDate = day.toISOString().split('T')[0];
                         const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
                         const holiday = getHolidayForDay(day);
-                        const cellClasses = `p-2 min-h-[120px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'} ${holiday ? 'bg-purple-100 cursor-pointer' : ''}`;
+                        const cellClasses = `p-1 min-h-[100px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'} ${holiday ? 'bg-purple-100 cursor-pointer' : ''}`;
     
                         return (
                           <div

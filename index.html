@@ -616,20 +616,12 @@
         }
 
         const auth = firebase.auth();
-        auth.getRedirectResult().then((result) => {
-          if (result.credential) {
-            console.log("Redirect sign-in successful:", result.user);
-          }
-        }).catch((error) => {
-          setMessage(`Error al iniciar sesión por redirección: ${error.message}`);
-          console.error(error);
-        });
-
+        // Con signInWithPopup, no necesitamos manejar getRedirectResult()
+        // El listener onAuthStateChanged es suficiente
         const unsubscribe = auth.onAuthStateChanged((user) => {
           setLoading(false);
           if (user) {
             const userEmail = user.email.toLowerCase().trim();
-            // 🐛 Línea de depuración: Imprime el correo electrónico del usuario desde Firebase
             console.log("Correo electrónico recibido de Firebase:", userEmail);
             console.log("Correos electrónicos autorizados:", authorizedEmails);
 
@@ -649,10 +641,20 @@
         return () => unsubscribe();
       }, []);
 
+      // ⚠️ Cambiado a signInWithPopup para una depuración más fácil en desarrollo
       const handleSignIn = async () => {
         const provider = new firebase.auth.GoogleAuthProvider();
         try {
-          await firebase.auth().signInWithRedirect(provider);
+          const result = await firebase.auth().signInWithPopup(provider);
+          const userEmail = result.user.email.toLowerCase().trim();
+          
+          if (authorizedEmails.includes(userEmail)) {
+            // No hacemos nada, el listener onAuthStateChanged se encargará de actualizar el estado
+            console.log("Login exitoso. El listener onAuthStateChanged actualizará la UI.");
+          } else {
+            setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
+            firebase.auth().signOut();
+          }
         } catch (error) {
           setMessage(`Error durante el inicio de sesión: ${error.message}`);
           console.error(error);

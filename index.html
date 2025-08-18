@@ -620,6 +620,19 @@
         }
 
         const auth = firebase.auth();
+        // Handle the redirect result first
+        auth.getRedirectResult().then((result) => {
+            if (result.credential) {
+                // A user successfully signed in via redirect.
+                // The onAuthStateChanged listener will handle the rest.
+                console.log("Redirect sign-in successful:", result.user);
+            }
+        }).catch((error) => {
+            // Handle errors from the redirect flow
+            setMessage(`Error al iniciar sesión por redirección: ${error.message}`);
+            console.error(error);
+        });
+
         const unsubscribe = auth.onAuthStateChanged((user) => {
           if (user) {
             // Verifica si el correo electrónico del usuario está en la lista de autorizados
@@ -642,7 +655,7 @@
       const handleSignIn = async () => {
         const provider = new firebase.auth.GoogleAuthProvider();
         try {
-          await firebase.auth().signInWithPopup(provider);
+          await firebase.auth().signInWithRedirect(provider);
         } catch (error) {
           setMessage(`Error durante el inicio de sesión: ${error.message}`);
           console.error(error);
@@ -663,7 +676,7 @@
           {user ? (
             <App user={user} onSignOut={handleSignOut} />
           ) : (
-            <LoginScreen onSignIn={handleSignIn} onMessageBox={setMessage} />
+            <LoginScreen onSignIn={handleSignIn} />
           )}
           {message && <MessageBox message={message} onClose={() => setMessage('')} />}
         </React.Fragment>

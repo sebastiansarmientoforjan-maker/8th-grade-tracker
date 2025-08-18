@@ -100,11 +100,10 @@
       const [loading, setLoading] = React.useState(true);
       const [confirmDelete, setConfirmDelete] = React.useState(null);
     
-      // Airtable API setup
-      // Por favor, reemplaza estos marcadores de posición con tu clave de API de Airtable y el ID de la base.
-      // Puedes encontrar estos valores en tu cuenta de Airtable.
-      // ¡Recuerda, el error que estás viendo es porque estos valores no son válidos!
-      const base = new Airtable({ apiKey: 'YOUR_AIRTABLE_API_KEY_HERE' }).base('YOUR_AIRTABLE_BASE_ID_HERE');
+      // Airtable API setup, using Vercel environment variables
+      const airtableApiKey = window.Vercel?.env?.AIRTABLE_API_KEY || '';
+      const airtableBaseId = window.Vercel?.env?.AIRTABLE_BASE_ID || '';
+      const base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
 
       const getWeekdays = (startDate) => {
         const weekdays = [];
@@ -121,9 +120,8 @@
       const fetchActivities = async () => {
         setLoading(true);
         try {
-          // Check for placeholder keys
-          if (base.apiKey === 'YOUR_AIRTABLE_API_KEY_HERE' || base.baseId === 'YOUR_AIRTABLE_BASE_ID_HERE') {
-            setMessage('Error de configuración: Por favor, reemplace "YOUR_AIRTABLE_API_KEY_HERE" y "YOUR_AIRTABLE_BASE_ID_HERE" con sus claves reales de Airtable.');
+          if (!airtableApiKey || !airtableBaseId) {
+            setMessage('Error de configuración de Airtable: Por favor, asegúrese de que las variables de entorno AIRTABLE_API_KEY y AIRTABLE_BASE_ID estén configuradas correctamente en Vercel.');
             setLoading(false);
             return;
           }
@@ -148,7 +146,7 @@
           setUnscheduledActivities(unscheduled);
           setMessage('Activities loaded successfully!');
         } catch (error) {
-          setMessage(`Error fetching activities. Please ensure your Airtable API key and Base ID are correct and the 'Activities' table exists.`);
+          setMessage(`Error fetching activities: ${error.message}. Por favor, asegúrese de que la clave de API y el ID de la base de Airtable sean correctos y que la tabla 'Activities' exista.`);
           console.error(error);
         } finally {
           setLoading(false);
@@ -552,7 +550,7 @@
     }
     
     // Login screen component
-    function LoginScreen({ onSignIn }) {
+    function LoginScreen({ onSignIn, onMessageBox }) {
       return (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 p-4">
           <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm text-center">
@@ -574,19 +572,24 @@
       const [user, setUser] = React.useState(null);
       const [loading, setLoading] = React.useState(true);
       const [message, setMessage] = React.useState('');
+      
+      const firebaseConfig = {
+        // Obteniendo las claves desde las variables de entorno de Vercel
+        apiKey: window.Vercel?.env?.FIREBASE_API_KEY || '',
+        authDomain: window.Vercel?.env?.FIREBASE_AUTH_DOMAIN || '',
+        projectId: window.Vercel?.env?.FIREBASE_PROJECT_ID || '',
+        storageBucket: window.Vercel?.env?.FIREBASE_STORAGE_BUCKET || '',
+        messagingSenderId: window.Vercel?.env?.FIREBASE_MESSAGING_SENDER_ID || '',
+        appId: window.Vercel?.env?.FIREBASE_APP_ID || ''
+      };
 
       React.useEffect(() => {
-        // Firebase configuration from Vercel environment variables
-        // NOTE: Replace these placeholder values with your actual Firebase keys
-        // Por favor, reemplaza estos valores con tus claves reales de Firebase.
-        const firebaseConfig = {
-          apiKey: 'YOUR_FIREBASE_API_KEY_HERE',
-          authDomain: 'YOUR_FIREBASE_AUTH_DOMAIN_HERE',
-          projectId: 'YOUR_FIREBASE_PROJECT_ID_HERE',
-          storageBucket: 'YOUR_FIREBASE_STORAGE_BUCKET_HERE',
-          messagingSenderId: 'YOUR_FIREBASE_MESSAGING_SENDER_ID_HERE',
-          appId: 'YOUR_FIREBASE_APP_ID_HERE'
-        };
+        // Verificar si las claves de Firebase son marcadores de posición
+        if (!firebaseConfig.apiKey) {
+          setMessage('Error de configuración de Firebase: Por favor, asegúrese de que las variables de entorno de Firebase estén configuradas correctamente en Vercel.');
+          setLoading(false);
+          return;
+        }
 
         // Initialize Firebase
         try {
@@ -595,6 +598,9 @@
             }
         } catch (e) {
             console.error("Error initializing Firebase:", e);
+            setMessage(`Error al inicializar Firebase: ${e.message}`);
+            setLoading(false);
+            return;
         }
 
         // Listen for authentication state changes
@@ -616,7 +622,7 @@
         try {
           await firebase.auth().signInWithPopup(provider);
         } catch (error) {
-          setMessage(`Error during sign-in: ${error.message}`);
+          setMessage(`Error durante el inicio de sesión: ${error.message}`);
           console.error(error);
         }
       };
@@ -625,28 +631,17 @@
         try {
           await firebase.auth().signOut();
         } catch (error) {
-          setMessage(`Error during sign-out: ${error.message}`);
+          setMessage(`Error durante el cierre de sesión: ${error.message}`);
           console.error(error);
         }
       };
-
-      if (loading) {
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
-            <div className="text-center">
-              <h2 className="text-2xl font-bold mb-2">Cargando aplicación...</h2>
-              <p className="text-gray-600">Verificando estado de autenticación.</p>
-            </div>
-          </div>
-        );
-      }
 
       return (
         <React.Fragment>
           {user ? (
             <App user={user} onSignOut={handleSignOut} />
           ) : (
-            <LoginScreen onSignIn={handleSignIn} />
+            <LoginScreen onSignIn={handleSignIn} onMessageBox={setMessage} />
           )}
           {message && <MessageBox message={message} onClose={() => setMessage('')} />}
         </React.Fragment>

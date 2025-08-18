@@ -245,6 +245,8 @@
     
       const handleDragStart = (e, activity) => {
         e.dataTransfer.setData("activityId", activity.id);
+        // También guardamos si la actividad es de la lista de no programadas para el drop
+        e.dataTransfer.setData("isUnscheduled", !activity.date);
       };
     
       const handleDragOver = (e, date, className) => {
@@ -257,39 +259,51 @@
       };
     
       // Esta función maneja el soltar una actividad en el calendario.
-      // Se usa para programar una actividad no programada o para re-programar una actividad ya existente.
+      // Ahora distingue entre "mover" (para actividades ya programadas) y "clonar" (para actividades no programadas).
       const handleDrop = async (e, newDate, newClass) => {
         e.preventDefault();
         const activityId = e.dataTransfer.getData("activityId");
+        const isUnscheduled = e.dataTransfer.getData("isUnscheduled") === "true";
         
-        // Busca la actividad tanto en la lista de programadas como en la de no programadas
-        const activityToUpdate = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
+        // Busca la actividad original
+        const originalActivity = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
       
-        if (activityToUpdate) {
-          const unitNumber = activityToUpdate.unit ? activityToUpdate.unit.split(' ')[1] : '';
-          const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-          
-          const titleWithoutPrefix = activityToUpdate.title.includes(' - ') ? activityToUpdate.title.split(' - ')[1] : activityToUpdate.title;
-          
-          const updatedActivityData = {
-            id: activityToUpdate.id,
-            title: `${unitPrefix}${titleWithoutPrefix}`,
-            date: newDate.toISOString().split('T')[0],
-            class: newClass
-          };
+        if (originalActivity) {
+            const unitNumber = originalActivity.unit ? originalActivity.unit.split(' ')[1] : '';
+            const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+            
+            // Removemos el prefijo de la unidad si existe para no duplicarlo al arrastrar de nuevo
+            const titleWithoutPrefix = originalActivity.title.startsWith(unitPrefix) 
+              ? originalActivity.title.substring(unitPrefix.length) 
+              : originalActivity.title;
 
-          try {
-            await base(airtableTableName).update(activityToUpdate.id, {
-              "Title": updatedActivityData.title,
-              "Date": updatedActivityData.date,
-              "Class": updatedActivityData.class
-            });
-            setMessage('Activity updated successfully!');
-            fetchActivities();
-          } catch (error) {
-            setMessage(`Error updating activity: ${error.message}`);
-            console.error(error);
-          }
+            // Preparamos los datos a guardar
+            const activityData = {
+              "Title": `${unitPrefix}${titleWithoutPrefix}`,
+              "Description": originalActivity.description,
+              "Unit": originalActivity.unit,
+              "Date": newDate.toISOString().split('T')[0],
+              "Class": newClass
+            };
+            
+            try {
+                if (isUnscheduled) {
+                    // Si la actividad viene de la lista de no programadas, creamos una nueva
+                    await base(airtableTableName).create(activityData);
+                    setMessage('Activity scheduled successfully!');
+                    console.log('Created new scheduled activity from unscheduled list.');
+                } else {
+                    // Si la actividad ya estaba programada, la actualizamos
+                    await base(airtableTableName).update(activityId, activityData);
+                    setMessage('Activity updated successfully!');
+                    console.log('Updated existing scheduled activity.');
+                }
+                
+                fetchActivities(); // Refresh data from Airtable
+            } catch (error) {
+                setMessage(`Error updating activity: ${error.message}`);
+                console.error(error);
+            }
         }
         setDraggedOverCell(null);
       };

@@ -543,7 +543,7 @@
       return (
         <div className="font-sans antialiased text-gray-800 bg-[#F8F8F8] min-h-screen p-4 flex flex-col">
           {/* Main Header (Title and User Actions) */}
-          <div className="flex justify-between items-start mb-6">
+          <div className="flex justify-between items-start mb-4">
             <div className="flex-1 text-center">
               <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
             </div>
@@ -576,7 +576,7 @@
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleUnscheduledDrop}
               >
-                <h3 className="text-lg font-bold mb-2 text-center">Unscheduled Activities</h3>
+                <h3 className="text-lg font-bold mb-2 text-center text-white bg-gray-800 rounded-md p-2 -m-2 mb-2">Unscheduled Activities</h3>
                 <div className="text-center">
                   <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 mb-4">
                     Add Activity
@@ -617,14 +617,14 @@
               {/* Weekly Calendar Grid - Columnar View */}
               <div className="flex-1 overflow-x-auto">
                 {/* Calendar Header with Navigation */}
-                <div className="flex justify-center items-center mb-6">
+                <div className="flex justify-center items-center mb-4">
                     <h2 className="text-xl font-bold md:text-2xl mr-4 text-gray-600">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
                     <div className="flex space-x-2">
                       <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
                       </button>
-                      <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="px-3 py-1 text-sm font-medium text-gray-700 bg-gray-200 rounded-md shadow-sm hover:bg-gray-300">
-                        Today
+                      <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-8h2v-4h-2v4zm1-6a1 1 0 100 2 1 1 0 000-2z" /></svg>
                       </button>
                       <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>

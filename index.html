@@ -301,14 +301,8 @@
         const originalActivity = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
         
         // Block drop if the day is a holiday
-        const isHoliday = holidays.some(h => {
-          const startDate = new Date(h.startDate);
-          const endDate = new Date(h.endDate);
-          endDate.setDate(endDate.getDate() + 1); // Make it inclusive
-          return newDate >= startDate && newDate <= endDate;
-        });
-
-        if (isHoliday) {
+        const holidayForDay = getHolidayForDay(newDate);
+        if (holidayForDay) {
             setMessage('Cannot schedule an activity on a holiday.');
             setDraggedOverCell(null);
             return;
@@ -554,11 +548,12 @@
         );
       }
       
-      const isDayHoliday = (day) => {
+      const getHolidayForDay = (day) => {
         const dayDate = day.toISOString().split('T')[0];
-        return holidays.some(h => {
+        const foundHoliday = holidays.find(h => {
           return dayDate >= h.startDate && dayDate <= h.endDate;
         });
+        return foundHoliday || null;
       };
 
       return (
@@ -671,28 +666,34 @@
                         );
                         const formattedDate = day.toISOString().split('T')[0];
                         const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
-                        const holidayClass = isDayHoliday(day) ? 'bg-gray-200' : '';
+                        const holiday = getHolidayForDay(day);
+                        const cellClasses = `p-2 min-h-[120px] rounded-lg transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-indigo-200' : ''} ${holiday ? 'bg-purple-200 cursor-pointer' : ''}`;
     
                         return (
                           <div
                             key={`${formattedDate}-${c}`}
-                            className={`p-2 min-h-[120px] rounded-lg transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-indigo-200' : ''} ${holidayClass}`}
+                            className={cellClasses}
                             onDragOver={(e) => handleDragOver(e, day, c)}
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, day, c)}
+                            onClick={() => { if (holiday) openHolidayModal(holiday); }}
                           >
                             <div className="space-y-1">
-                              {dayActivities.map(activity => (
-                                <div
-                                  key={activity.id}
-                                  className={`p-1 text-xs rounded-lg text-white cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
-                                  onClick={() => openActivityModal(activity)}
-                                  draggable
-                                  onDragStart={(e) => handleDragStart(e, activity)}
-                                >
-                                  {activity.title}
-                                </div>
-                              ))}
+                              {holiday ? (
+                                <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
+                              ) : (
+                                dayActivities.map(activity => (
+                                  <div
+                                    key={activity.id}
+                                    className={`p-1 text-xs rounded-lg text-white cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
+                                    onClick={(e) => { e.stopPropagation(); openActivityModal(activity); }}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, activity)}
+                                  >
+                                    {activity.title}
+                                  </div>
+                                ))
+                              )}
                             </div>
                           </div>
                         );

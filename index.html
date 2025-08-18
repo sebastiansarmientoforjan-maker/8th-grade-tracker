@@ -124,7 +124,6 @@
       const weekdays = getWeekdays(currentWeekStart);
     
       const fetchData = async () => {
-        setLoading(true);
         try {
             console.log('Fetching all data from Firestore...');
             const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot] = await Promise.all([

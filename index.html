@@ -11,11 +11,9 @@
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <!-- Airtable SDKs -->
-    <script src="https://cdn.jsdelivr.net/npm/airtable@0.11.6/lib/airtable.umd.js"></script>
-    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
     <style>
         body {
             font-family: 'Inter', sans-serif;
@@ -100,20 +98,10 @@
       const [loading, setLoading] = React.useState(true);
       const [confirmDelete, setConfirmDelete] = React.useState(null);
     
-      // Airtable credentials
-      const airtableApiKey = 'pat5F2wppyaEJmcas.16dbab5e7eea0d2c720cbaff9d2184c87674cba3e3e7c54904262edd016c0641';
-      const airtableBaseId = 'app1ZWNrSqzTWUYPR';
-      const airtableTableName = 'Activities';
-      
-      let base;
-      try {
-        console.log(`Intentando conectar con Airtable. Base ID: ${airtableBaseId}, API Key: ${airtableApiKey}`);
-        base = new Airtable({ apiKey: airtableApiKey }).base(airtableBaseId);
-      } catch (e) {
-        setMessage(`Error al inicializar Airtable. Esto podría deberse a credenciales incorrectas. Verifique su API Key y Base ID.`);
-        console.error("Error initializing Airtable:", e);
-        if (loading) setLoading(false);
-      }
+      // Firestore connections
+      const db = firebase.firestore();
+      const userUID = user.uid;
+      const activitiesRef = db.collection('activities');
 
       const getWeekdays = (startDate) => {
         const weekdays = [];
@@ -126,42 +114,30 @@
       };
     
       const weekdays = getWeekdays(currentWeekStart);
-      
+    
       const fetchActivities = async () => {
         setLoading(true);
         try {
-          if (!base) {
-            setMessage('Error de configuración: No se pudo inicializar la conexión con Airtable.');
-            setLoading(false);
-            return;
-          }
-          console.log('Fetching activities from Airtable...');
-          const records = await base(airtableTableName).select({
-            view: "Grid view"
-          }).all();
-          console.log('Successfully fetched activities:', records.length, 'records.');
+            console.log('Fetching activities from Firestore...');
+            const snapshot = await activitiesRef.where('userId', '==', userUID).get();
+            
+            const allActivities = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
 
-          const allActivities = records.map(record => ({
-            id: record.id,
-            title: record.fields.Title,
-            description: record.fields.Description,
-            unit: record.fields.Unit,
-            class: record.fields.Class,
-            date: record.fields.Date
-          }));
+            const scheduled = allActivities.filter(act => act.date && act.class);
+            const unscheduled = allActivities.filter(act => !act.date || !act.class);
 
-          const scheduled = allActivities.filter(act => act.date && act.class);
-          const unscheduled = allActivities.filter(act => !act.date || !act.class);
-
-          setActivities(scheduled);
-          setUnscheduledActivities(unscheduled);
-          setMessage('Activities loaded successfully!');
-          console.log('Activities and unscheduled activities state updated.');
+            setActivities(scheduled);
+            setUnscheduledActivities(unscheduled);
+            setMessage('Activities loaded successfully!');
+            console.log('Activities and unscheduled activities state updated.');
         } catch (error) {
-          setMessage(`Error fetching activities: ${error.message}. Asegúrese de que sus credenciales de Airtable sean correctas y que la tabla '${airtableTableName}' exista.`);
-          console.error("Error fetching activities:", error);
+            setMessage(`Error fetching activities: ${error.message}`);
+            console.error("Error fetching activities:", error);
         } finally {
-          setLoading(false);
+            setLoading(false);
         }
       };
       
@@ -188,37 +164,39 @@
     
       const handleSave = async (activityData) => {
         try {
-          if (activityData.id) {
-            await base(airtableTableName).update(activityData.id, {
-              "Title": activityData.title,
-              "Description": activityData.description,
-              "Unit": activityData.unit,
-              "Class": activityData.class,
-              "Date": activityData.date
-            });
-          } else {
-            await base(airtableTableName).create({
-              "Title": activityData.title,
-              "Description": activityData.description,
-              "Unit": activityData.unit,
-              "Class": activityData.class,
-              "Date": activityData.date
-            });
-          }
-          setMessage('Activity saved successfully!');
-          fetchActivities(); // Refresh data from Airtable
+            if (activityData.id) {
+                await activitiesRef.doc(activityData.id).update({
+                    "title": activityData.title,
+                    "description": activityData.description,
+                    "unit": activityData.unit,
+                    "class": activityData.class,
+                    "date": activityData.date
+                });
+                setMessage('Activity updated successfully!');
+            } else {
+                await activitiesRef.add({
+                    "title": activityData.title,
+                    "description": activityData.description,
+                    "unit": activityData.unit,
+                    "class": activityData.class,
+                    "date": activityData.date,
+                    "userId": userUID
+                });
+                setMessage('Activity created successfully!');
+            }
+            fetchActivities();
         } catch (error) {
-          setMessage(`Error saving activity: ${error.message}`);
-          console.error(error);
+            setMessage(`Error saving activity: ${error.message}`);
+            console.error(error);
         }
         closeModal();
       };
       
       const handleUnschedule = async (activityId) => {
         try {
-          await base(airtableTableName).update(activityId, {
-            "Date": null,
-            "Class": null
+          await activitiesRef.doc(activityId).update({
+            "date": null,
+            "class": null
           });
           setMessage('Activity unscheduled successfully!');
           fetchActivities();
@@ -232,9 +210,9 @@
       
       const handlePermanentDelete = async (activityId) => {
           try {
-            await base(airtableTableName).destroy(activityId);
+            await activitiesRef.doc(activityId).delete();
             setMessage('Activity permanently deleted!');
-            fetchActivities(); // Refresh data from Airtable
+            fetchActivities(); // Refresh data from Firestore
           } catch (error) {
             setMessage(`Error deleting activity: ${error.message}`);
             console.error(error);
@@ -245,7 +223,6 @@
     
       const handleDragStart = (e, activity) => {
         e.dataTransfer.setData("activityId", activity.id);
-        // También guardamos si la actividad es de la lista de no programadas para el drop
         e.dataTransfer.setData("isUnscheduled", !activity.date);
       };
     
@@ -258,48 +235,40 @@
         setDraggedOverCell(null);
       };
     
-      // Esta función maneja el soltar una actividad en el calendario.
-      // Ahora distingue entre "mover" (para actividades ya programadas) y "clonar" (para actividades no programadas).
       const handleDrop = async (e, newDate, newClass) => {
         e.preventDefault();
         const activityId = e.dataTransfer.getData("activityId");
         const isUnscheduled = e.dataTransfer.getData("isUnscheduled") === "true";
         
-        // Busca la actividad original
         const originalActivity = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
-      
+        
         if (originalActivity) {
             const unitNumber = originalActivity.unit ? originalActivity.unit.split(' ')[1] : '';
             const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-            
-            // Removemos el prefijo de la unidad si existe para no duplicarlo al arrastrar de nuevo
-            const titleWithoutPrefix = originalActivity.title.startsWith(unitPrefix) 
-              ? originalActivity.title.substring(unitPrefix.length) 
+            const titleWithoutPrefix = originalActivity.title.startsWith(unitPrefix)
+              ? originalActivity.title.substring(unitPrefix.length)
               : originalActivity.title;
 
-            // Preparamos los datos a guardar
             const activityData = {
-              "Title": `${unitPrefix}${titleWithoutPrefix}`,
-              "Description": originalActivity.description,
-              "Unit": originalActivity.unit,
-              "Date": newDate.toISOString().split('T')[0],
-              "Class": newClass
+              "title": `${unitPrefix}${titleWithoutPrefix}`,
+              "description": originalActivity.description,
+              "unit": originalActivity.unit,
+              "date": newDate.toISOString().split('T')[0],
+              "class": newClass
             };
             
             try {
                 if (isUnscheduled) {
-                    // Si la actividad viene de la lista de no programadas, creamos una nueva
-                    await base(airtableTableName).create(activityData);
+                    await activitiesRef.add({ ...activityData, "userId": userUID });
                     setMessage('Activity scheduled successfully!');
                     console.log('Created new scheduled activity from unscheduled list.');
                 } else {
-                    // Si la actividad ya estaba programada, la actualizamos
-                    await base(airtableTableName).update(activityId, activityData);
+                    await activitiesRef.doc(activityId).update(activityData);
                     setMessage('Activity updated successfully!');
                     console.log('Updated existing scheduled activity.');
                 }
                 
-                fetchActivities(); // Refresh data from Airtable
+                fetchActivities();
             } catch (error) {
                 setMessage(`Error updating activity: ${error.message}`);
                 console.error(error);
@@ -308,8 +277,6 @@
         setDraggedOverCell(null);
       };
       
-      // Esta función maneja el soltar una actividad en el área de actividades no programadas.
-      // Se usa para "desagendar" una actividad del calendario.
       const handleUnscheduledDrop = async (e) => {
         e.preventDefault();
         const activityId = e.dataTransfer.getData("activityId");
@@ -317,9 +284,9 @@
     
         if (activityToUpdate) {
           try {
-            await base(airtableTableName).update(activityToUpdate.id, {
-              "Date": null,
-              "Class": null
+            await activitiesRef.doc(activityToUpdate.id).update({
+              "date": null,
+              "class": null
             });
             setMessage('Activity unscheduled successfully!');
             fetchActivities();
@@ -353,9 +320,7 @@
           setFormData({ ...formData, [name]: value });
         };
         
-        // Determina qué función de eliminación se usará
         const isScheduled = selectedActivity && selectedActivity.date;
-        const handleDeleteFunction = isScheduled ? handleUnschedule : handlePermanentDelete;
         const deleteButtonText = isScheduled ? 'Unschedule' : 'Delete Permanently';
 
         return (
@@ -452,7 +417,7 @@
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
             <div className="text-center">
               <h2 className="text-2xl font-bold mb-2">Cargando actividades...</h2>
-              <p className="text-gray-600">Conectando a Airtable.</p>
+              <p className="text-gray-600">Conectando a Firebase.</p>
             </div>
           </div>
         );
@@ -561,7 +526,7 @@
                         );
                         const formattedDate = day.toISOString().split('T')[0];
                         const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
-        
+    
                         return (
                           <div
                             key={`${formattedDate}-${c}`}
@@ -630,13 +595,13 @@
       // Firebase credentials
       const firebaseConfig = {
         apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64',
-        authDomain: 'th-grade-tracker.firebaseapp.com', 
+        authDomain: 'th-grade-tracker.firebaseapp.com',
       };
 
       // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
       const authorizedEmails = [
         'ssarmiento@craighouse.cl',
-      ].map(email => email.toLowerCase().trim()); // Normalizar a minúsculas y quitar espacios
+      ].map(email => email.toLowerCase().trim());
 
       React.useEffect(() => {
         if (!firebaseConfig.apiKey) {

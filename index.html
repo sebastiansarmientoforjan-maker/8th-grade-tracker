@@ -88,8 +88,8 @@
         const startOfWeek = new Date(today.setDate(diff));
         return startOfWeek;
       });
-      const [activities, setActivities] = React.useState([]);
-      const [unscheduledActivities, setUnscheduledActivities] = React.useState([]);
+      const [scheduledActivities, setScheduledActivities] = React.useState([]);
+      const [activityTemplates, setActivityTemplates] = React.useState([]);
       const [holidays, setHolidays] = React.useState([]);
       const [selectedUnit, setSelectedUnit] = React.useState('All');
       const [selectedActivity, setSelectedActivity] = React.useState(null);
@@ -104,7 +104,8 @@
       // Firestore connections
       const db = firebase.firestore();
       const userUID = user.uid;
-      const activitiesRef = db.collection('activities');
+      const templatesRef = db.collection('activity_templates');
+      const scheduledRef = db.collection('scheduled_activities');
       const holidaysRef = db.collection('holidays');
 
       const getWeekdays = (startDate) => {
@@ -119,14 +120,21 @@
     
       const weekdays = getWeekdays(currentWeekStart);
     
-      const fetchActivities = async () => {
+      const fetchData = async () => {
         setLoading(true);
         try {
-            console.log('Fetching activities and holidays from Firestore...');
-            const activitiesSnapshot = await activitiesRef.where('userId', '==', userUID).get();
-            const holidaysSnapshot = await holidaysRef.where('userId', '==', userUID).get();
+            console.log('Fetching all data from Firestore...');
+            const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot] = await Promise.all([
+                templatesRef.where('userId', '==', userUID).get(),
+                scheduledRef.where('userId', '==', userUID).get(),
+                holidaysRef.where('userId', '==', userUID).get(),
+            ]);
 
-            const allActivities = activitiesSnapshot.docs.map(doc => ({
+            const fetchedTemplates = templatesSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedScheduled = scheduledSnapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             }));
@@ -135,14 +143,11 @@
                 ...doc.data()
             }));
 
-            const scheduled = allActivities.filter(act => act.date && act.class);
-            const unscheduled = allActivities.filter(act => !act.date || !act.class);
-
-            setActivities(scheduled);
-            setUnscheduledActivities(unscheduled);
+            setActivityTemplates(fetchedTemplates);
+            setScheduledActivities(fetchedScheduled);
             setHolidays(fetchedHolidays);
             setMessage('Data loaded successfully!');
-            console.log('Activities, unscheduled activities, and holidays state updated.');
+            console.log('All state updated.');
         } catch (error) {
             setMessage(`Error fetching data: ${error.message}`);
             console.error("Error fetching data:", error);
@@ -153,7 +158,7 @@
       
       React.useEffect(() => {
         console.log('useEffect triggered for fetching data.');
-        fetchActivities();
+        fetchData();
       }, []);
     
       const handlePreviousWeek = () => {
@@ -163,8 +168,8 @@
         setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + 7));
       };
     
-      const openActivityModal = (activity = null) => {
-        setSelectedActivity(activity);
+      const openActivityModal = (activity = null, isScheduled = false) => {
+        setSelectedActivity({ ...activity, isScheduled });
         setIsActivityModalOpen(true);
       };
       const closeActivityModal = () => {
@@ -181,29 +186,39 @@
         setSelectedHoliday(null);
       };
     
-      const handleSave = async (activityData) => {
+      const handleSave = async (activityData, isScheduled) => {
         try {
-            if (activityData.id) {
-                await activitiesRef.doc(activityData.id).update({
-                    "title": activityData.title,
-                    "description": activityData.description,
-                    "unit": activityData.unit,
-                    "class": activityData.class,
-                    "date": activityData.date
-                });
-                setMessage('Activity updated successfully!');
-            } else {
-                await activitiesRef.add({
+            if (isScheduled) {
+                // Update a scheduled instance
+                await scheduledRef.doc(activityData.id).update({
                     "title": activityData.title,
                     "description": activityData.description,
                     "unit": activityData.unit,
                     "class": activityData.class,
                     "date": activityData.date,
-                    "userId": userUID
+                    "templateId": activityData.templateId
                 });
-                setMessage('Activity created successfully!');
+                setMessage('Scheduled activity updated successfully!');
+            } else {
+                // Update/add a template
+                if (activityData.id) {
+                    await templatesRef.doc(activityData.id).update({
+                        "title": activityData.title,
+                        "description": activityData.description,
+                        "unit": activityData.unit
+                    });
+                    setMessage('Unscheduled activity updated successfully!');
+                } else {
+                    await templatesRef.add({
+                        "title": activityData.title,
+                        "description": activityData.description,
+                        "unit": activityData.unit,
+                        "userId": userUID
+                    });
+                    setMessage('Unscheduled activity created successfully!');
+                }
             }
-            fetchActivities();
+            fetchData();
         } catch (error) {
             setMessage(`Error saving activity: ${error.message}`);
             console.error(error);
@@ -229,7 +244,7 @@
                 });
                 setMessage('Holiday created successfully!');
             }
-            fetchActivities();
+            fetchData();
         } catch (error) {
             setMessage(`Error saving holiday: ${error.message}`);
             console.error(error);
@@ -241,7 +256,7 @@
           try {
             await holidaysRef.doc(holidayId).delete();
             setMessage('Holiday deleted successfully!');
-            fetchActivities();
+            fetchData();
           } catch (error) {
             setMessage(`Error deleting holiday: ${error.message}`);
             console.error(error);
@@ -250,38 +265,44 @@
           closeHolidayModal();
       };
       
-      const handleUnschedule = async (activityId) => {
-        try {
-          await activitiesRef.doc(activityId).update({
-            "date": null,
-            "class": null
-          });
-          setMessage('Activity unscheduled successfully!');
-          fetchActivities();
-        } catch (error) {
-          setMessage(`Error unscheduling activity: ${error.message}`);
-          console.error(error);
-        }
-        closeActivityModal();
-        setConfirmDelete(null);
-      };
-      
-      const handlePermanentDelete = async (activityId) => {
+      const handleDeleteScheduled = async (scheduledId) => {
           try {
-            await activitiesRef.doc(activityId).delete();
-            setMessage('Activity permanently deleted!');
-            fetchActivities(); // Refresh data from Firestore
+            await scheduledRef.doc(scheduledId).delete();
+            setMessage('Scheduled activity deleted successfully!');
+            fetchData();
           } catch (error) {
-            setMessage(`Error deleting activity: ${error.message}`);
+            setMessage(`Error deleting scheduled activity: ${error.message}`);
             console.error(error);
           }
-          closeActivityModal();
           setConfirmDelete(null);
+          closeActivityModal();
+      };
+
+      const handleDeleteTemplate = async (templateId) => {
+          try {
+              // Delete all scheduled activities linked to this template first
+              const batch = db.batch();
+              const scheduledInstances = await scheduledRef.where('templateId', '==', templateId).get();
+              scheduledInstances.docs.forEach(doc => {
+                  batch.delete(doc.ref);
+              });
+
+              // Delete the master template
+              batch.delete(templatesRef.doc(templateId));
+
+              await batch.commit();
+              setMessage('Template and all scheduled instances deleted!');
+              fetchData();
+          } catch (error) {
+              setMessage(`Error deleting template: ${error.message}`);
+              console.error(error);
+          }
+          setConfirmDelete(null);
+          closeActivityModal();
       };
     
       const handleDragStart = (e, activity) => {
-        e.dataTransfer.setData("activityId", activity.id);
-        e.dataTransfer.setData("isUnscheduled", !activity.date);
+        e.dataTransfer.setData("templateId", activity.id);
       };
     
       const handleDragOver = (e, date, className) => {
@@ -295,12 +316,9 @@
     
       const handleDrop = async (e, newDate, newClass) => {
         e.preventDefault();
-        const activityId = e.dataTransfer.getData("activityId");
-        const isUnscheduled = e.dataTransfer.getData("isUnscheduled") === "true";
+        const templateId = e.dataTransfer.getData("templateId");
+        const template = activityTemplates.find(t => t.id === templateId);
         
-        const originalActivity = activities.find(act => act.id === activityId) || unscheduledActivities.find(act => act.id === activityId);
-        
-        // Block drop if the day is a holiday
         const holidayForDay = getHolidayForDay(newDate);
         if (holidayForDay) {
             setMessage('Cannot schedule an activity on a holiday.');
@@ -308,35 +326,29 @@
             return;
         }
 
-        if (originalActivity) {
-            const unitNumber = originalActivity.unit ? originalActivity.unit.split(' ')[1] : '';
+        if (template) {
+            const unitNumber = template.unit ? template.unit.split(' ')[1] : '';
             const unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-            const titleWithoutPrefix = originalActivity.title.startsWith(unitPrefix)
-              ? originalActivity.title.substring(unitPrefix.length)
-              : originalActivity.title;
+            const titleWithoutPrefix = template.title.startsWith(unitPrefix)
+              ? template.title.substring(unitPrefix.length)
+              : template.title;
 
-            const activityData = {
+            const scheduledData = {
+              "templateId": template.id,
               "title": `${unitPrefix}${titleWithoutPrefix}`,
-              "description": originalActivity.description,
-              "unit": originalActivity.unit,
+              "description": template.description,
+              "unit": template.unit,
               "date": newDate.toISOString().split('T')[0],
-              "class": newClass
+              "class": newClass,
+              "userId": userUID
             };
             
             try {
-                if (isUnscheduled) {
-                    await activitiesRef.add({ ...activityData, "userId": userUID });
-                    setMessage('Activity scheduled successfully!');
-                    console.log('Created new scheduled activity from unscheduled list.');
-                } else {
-                    await activitiesRef.doc(activityId).update(activityData);
-                    setMessage('Activity updated successfully!');
-                    console.log('Updated existing scheduled activity.');
-                }
-                
-                fetchActivities();
+                await scheduledRef.add(scheduledData);
+                setMessage('Activity scheduled successfully!');
+                fetchData();
             } catch (error) {
-                setMessage(`Error updating activity: ${error.message}`);
+                setMessage(`Error scheduling activity: ${error.message}`);
                 console.error(error);
             }
         }
@@ -345,22 +357,8 @@
       
       const handleUnscheduledDrop = async (e) => {
         e.preventDefault();
-        const activityId = e.dataTransfer.getData("activityId");
-        const activityToUpdate = activities.find(act => act.id === activityId);
-    
-        if (activityToUpdate) {
-          try {
-            await activitiesRef.doc(activityToUpdate.id).update({
-              "date": null,
-              "class": null
-            });
-            setMessage('Activity unscheduled successfully!');
-            fetchActivities();
-          } catch (error) {
-            setMessage(`Error unscheduling activity: ${error.message}`);
-            console.error(error);
-          }
-        }
+        // This is where a scheduled activity could be 'unscheduled', but we don't have that functionality.
+        // For now, this is just a drop target to prevent default browser behavior.
       };
     
       const ActivityModal = () => {
@@ -386,13 +384,13 @@
           setFormData({ ...formData, [name]: value });
         };
         
-        const isScheduled = selectedActivity && selectedActivity.date;
-        const deleteButtonText = isScheduled ? 'Unschedule' : 'Delete Permanently';
+        const isScheduled = selectedActivity && selectedActivity.isScheduled;
+        const deleteButtonText = isScheduled ? 'Delete Instance' : 'Delete All';
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
             <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
-              <h2 className="text-xl font-bold mb-4">{selectedActivity && selectedActivity.date ? 'Edit Scheduled Activity' : 'Add/Edit Unscheduled Activity'}</h2>
+              <h2 className="text-xl font-bold mb-4">{isScheduled ? 'Edit Scheduled Activity' : 'Add/Edit Unscheduled Activity'}</h2>
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Title</label>
@@ -416,30 +414,32 @@
                     {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => <option key={u} value={u}>{u}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Class</label>
-                  <select
-                    name="class"
-                    value={formData.class || ''}
-                    onChange={handleChange}
-                    disabled={!isScheduled}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed text-gray-800"
-                  >
-                    <option value="">Unscheduled</option>
-                    {classes.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">Date</label>
-                  <input
-                    type="date"
-                    name="date"
-                    value={formData.date || ''}
-                    onChange={handleChange}
-                    disabled={!isScheduled}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed text-gray-800"
-                  />
-                </div>
+                {isScheduled && (
+                  <React.Fragment>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Class</label>
+                      <select
+                        name="class"
+                        value={formData.class || ''}
+                        onChange={handleChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800"
+                      >
+                        <option value="">Unscheduled</option>
+                        {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Date</label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={formData.date || ''}
+                        onChange={handleChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-gray-800"
+                      />
+                    </div>
+                  </React.Fragment>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description</label>
                   <textarea
@@ -452,7 +452,7 @@
                 </div>
               </div>
               <div className="mt-6 flex justify-end space-x-3">
-                {selectedActivity && (
+                {selectedActivity.id && (
                   <button
                     onClick={() => setConfirmDelete(selectedActivity.id)}
                     className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
@@ -467,7 +467,7 @@
                   Cancel
                 </button>
                 <button
-                  onClick={() => handleSave(formData)}
+                  onClick={() => handleSave(formData, isScheduled)}
                   className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
                 >
                   Save
@@ -608,17 +608,17 @@
                   </select>
                 </div>
                 <div className="space-y-2">
-                  {unscheduledActivities
-                    .filter(activity => selectedUnit === 'All' || activity.unit === selectedUnit)
-                    .map(activity => (
+                  {activityTemplates
+                    .filter(template => selectedUnit === 'All' || template.unit === selectedUnit)
+                    .map(template => (
                       <div
-                        key={activity.id}
+                        key={template.id}
                         className={`p-2 text-sm rounded-lg text-white cursor-pointer transition-shadow duration-200 bg-gray-400 hover:shadow-md`}
-                        onClick={() => openActivityModal(activity)}
+                        onClick={() => openActivityModal(template)}
                         draggable
-                        onDragStart={(e) => handleDragStart(e, activity)}
+                        onDragStart={(e) => handleDragStart(e, template)}
                       >
-                        {activity.title}
+                        {template.title}
                       </div>
                     ))}
                 </div>
@@ -661,7 +661,7 @@
                       </div>
                       {/* Daily cells for each class */}
                       {weekdays.map(day => {
-                        const dayActivities = activities.filter(act =>
+                        const dayActivities = scheduledActivities.filter(act =>
                           act.date === day.toISOString().split('T')[0] && act.class === c
                         );
                         const formattedDate = day.toISOString().split('T')[0];
@@ -686,9 +686,7 @@
                                   <div
                                     key={activity.id}
                                     className={`p-1 text-xs rounded-lg text-white cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
-                                    onClick={(e) => { e.stopPropagation(); openActivityModal(activity); }}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, activity)}
+                                    onClick={(e) => { e.stopPropagation(); openActivityModal(activity, true); }}
                                   >
                                     {activity.title}
                                   </div>
@@ -707,11 +705,19 @@
           {isActivityModalOpen && <ActivityModal />}
           {isHolidayModalOpen && <HolidayModal />}
           {message && <MessageBox message={message} onClose={() => setMessage('')} />}
-          {confirmDelete && selectedActivity && <ConfirmationBox
-            message={selectedActivity.date ? "Are you sure you want to unschedule this activity?" : "Are you sure you want to permanently delete this activity?"}
-            onConfirm={selectedActivity.date ? () => handleUnschedule(confirmDelete) : () => handlePermanentDelete(confirmDelete)}
-            onCancel={() => setConfirmDelete(null)}
-          />}
+          {confirmDelete && selectedActivity && (selectedActivity.isScheduled ? (
+              <ConfirmationBox
+                message="Are you sure you want to delete this scheduled activity?"
+                onConfirm={() => handleDeleteScheduled(confirmDelete)}
+                onCancel={() => setConfirmDelete(null)}
+              />
+          ) : (
+              <ConfirmationBox
+                message="Are you sure you want to permanently delete this template and all its scheduled copies?"
+                onConfirm={() => handleDeleteTemplate(confirmDelete)}
+                onCancel={() => setConfirmDelete(null)}
+              />
+          ))}
           {confirmDelete && selectedHoliday && <ConfirmationBox
               message="Are you sure you want to delete this holiday?"
               onConfirm={() => handleDeleteHoliday(confirmDelete)}

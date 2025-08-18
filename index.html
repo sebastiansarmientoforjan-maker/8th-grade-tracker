@@ -80,6 +80,9 @@
         '8R3': 'bg-blue-500',
         '8R4': 'bg-indigo-500',
       };
+      
+      const authorizedHolidayManager = 'ssarmiento@craighouse.cl';
+      const isHolidayManager = user.email === authorizedHolidayManager;
     
       const [currentWeekStart, setCurrentWeekStart] = React.useState(() => {
         const today = new Date();
@@ -125,9 +128,9 @@
         try {
             console.log('Fetching all data from Firestore...');
             const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot] = await Promise.all([
-                templatesRef.where('userId', '==', userUID).get(),
-                scheduledRef.where('userId', '==', userUID).get(),
-                holidaysRef.where('userId', '==', userUID).get(),
+                templatesRef.get(),
+                scheduledRef.get(),
+                holidaysRef.get(),
             ]);
 
             const fetchedTemplates = templatesSnapshot.docs.map(doc => ({
@@ -189,7 +192,6 @@
       const handleSave = async (activityData, isScheduled) => {
         try {
             if (isScheduled) {
-                // Update a scheduled instance
                 await scheduledRef.doc(activityData.id).update({
                     "title": activityData.title,
                     "description": activityData.description,
@@ -200,7 +202,6 @@
                 });
                 setMessage('Scheduled activity updated successfully!');
             } else {
-                // Update/add a template
                 if (activityData.id) {
                     await templatesRef.doc(activityData.id).update({
                         "title": activityData.title,
@@ -213,7 +214,7 @@
                         "title": activityData.title,
                         "description": activityData.description,
                         "unit": activityData.unit,
-                        "userId": userUID
+                        "userId": userUID // Add userId for future potential rules
                     });
                     setMessage('Unscheduled activity created successfully!');
                 }
@@ -280,16 +281,12 @@
 
       const handleDeleteTemplate = async (templateId) => {
           try {
-              // Delete all scheduled activities linked to this template first
               const batch = db.batch();
               const scheduledInstances = await scheduledRef.where('templateId', '==', templateId).get();
               scheduledInstances.docs.forEach(doc => {
                   batch.delete(doc.ref);
               });
-
-              // Delete the master template
               batch.delete(templatesRef.doc(templateId));
-
               await batch.commit();
               setMessage('Template and all scheduled instances deleted!');
               fetchData();
@@ -340,7 +337,7 @@
               "unit": template.unit,
               "date": newDate.toISOString().split('T')[0],
               "class": newClass,
-              "userId": userUID
+              "userId": userUID // Add userId for future potential rules
             };
             
             try {
@@ -357,8 +354,6 @@
       
       const handleUnscheduledDrop = async (e) => {
         e.preventDefault();
-        // This is where a scheduled activity could be 'unscheduled', but we don't have that functionality.
-        // For now, this is just a drop target to prevent default browser behavior.
       };
     
       const ActivityModal = () => {
@@ -571,12 +566,14 @@
                       Sign Out
                     </button>
                 </div>
-                <button
-                    onClick={() => openHolidayModal()}
-                    className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
-                >
-                    Manage Holidays
-                </button>
+                {isHolidayManager && (
+                  <button
+                      onClick={() => openHolidayModal()}
+                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+                  >
+                      Manage Holidays
+                  </button>
+                )}
             </div>
           </div>
           <div className="flex-1 bg-white rounded-xl shadow-lg p-4 lg:p-6 overflow-x-auto">
@@ -676,7 +673,7 @@
                             onDragOver={(e) => handleDragOver(e, day, c)}
                             onDragLeave={handleDragLeave}
                             onDrop={(e) => handleDrop(e, day, c)}
-                            onClick={() => { if (holiday) openHolidayModal(holiday); }}
+                            onClick={() => { if (holiday && isHolidayManager) openHolidayModal(holiday); }}
                           >
                             <div className="space-y-1">
                               {holiday ? (
@@ -761,6 +758,10 @@
       // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
       const authorizedEmails = [
         'ssarmiento@craighouse.cl',
+        'fmorales@craighouse.cl',
+        'dmunoz@craighouse.cl',
+        'imoren@craighouse.cl',
+        'thernandez@craighouse.cl'
       ].map(email => email.toLowerCase().trim());
 
       React.useEffect(() => {

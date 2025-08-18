@@ -616,8 +616,6 @@
         }
 
         const auth = firebase.auth();
-        // Con signInWithPopup, no necesitamos manejar getRedirectResult()
-        // El listener onAuthStateChanged es suficiente
         const unsubscribe = auth.onAuthStateChanged((user) => {
           setLoading(false);
           if (user) {
@@ -641,7 +639,6 @@
         return () => unsubscribe();
       }, []);
 
-      // ⚠️ Cambiado a signInWithPopup para una depuración más fácil en desarrollo
       const handleSignIn = async () => {
         const provider = new firebase.auth.GoogleAuthProvider();
         try {
@@ -649,8 +646,9 @@
           const userEmail = result.user.email.toLowerCase().trim();
           
           if (authorizedEmails.includes(userEmail)) {
-            // No hacemos nada, el listener onAuthStateChanged se encargará de actualizar el estado
-            console.log("Login exitoso. El listener onAuthStateChanged actualizará la UI.");
+            // ✅ Actualización clave: establecer el usuario directamente en el estado aquí
+            setUser(result.user);
+            console.log("Login exitoso. El estado del usuario se ha actualizado directamente.");
           } else {
             setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
             firebase.auth().signOut();

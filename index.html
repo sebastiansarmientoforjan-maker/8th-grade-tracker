@@ -101,10 +101,9 @@
       const [confirmDelete, setConfirmDelete] = React.useState(null);
     
       // Airtable credentials
-      // ⚠️ Importante: Asegúrate de que esta clave tenga permisos de "lectura" y "escritura".
       const airtableApiKey = 'pat5F2wppyaEJmcas.16dbab5e7eea0d2c720cbaff9d2184c87674cba3e3e7c54904262edd016c0641';
       const airtableBaseId = 'app1ZWNrSqzTWUYPR';
-      const airtableTableName = 'Activities'; // Esta es la tabla que usará la aplicación.
+      const airtableTableName = 'Activities';
       
       let base;
       try {
@@ -113,7 +112,6 @@
       } catch (e) {
         setMessage(`Error al inicializar Airtable. Esto podría deberse a credenciales incorrectas. Verifique su API Key y Base ID.`);
         console.error("Error initializing Airtable:", e);
-        // We set loading to false so the user can see the message.
         if (loading) setLoading(false);
       }
 
@@ -137,10 +135,11 @@
             setLoading(false);
             return;
           }
-
+          console.log('Fetching activities from Airtable...');
           const records = await base(airtableTableName).select({
             view: "Grid view"
           }).all();
+          console.log('Successfully fetched activities:', records.length, 'records.');
 
           const allActivities = records.map(record => ({
             id: record.id,
@@ -157,15 +156,17 @@
           setActivities(scheduled);
           setUnscheduledActivities(unscheduled);
           setMessage('Activities loaded successfully!');
+          console.log('Activities and unscheduled activities state updated.');
         } catch (error) {
           setMessage(`Error fetching activities: ${error.message}. Asegúrese de que sus credenciales de Airtable sean correctas y que la tabla '${airtableTableName}' exista.`);
-          console.error(error);
+          console.error("Error fetching activities:", error);
         } finally {
           setLoading(false);
         }
       };
       
       React.useEffect(() => {
+        console.log('useEffect triggered for fetching activities.');
         fetchActivities();
       }, []);
     
@@ -212,11 +213,27 @@
         }
         closeModal();
       };
-    
-      const handleDelete = async (activityId) => {
+      
+      const handleUnschedule = async (activityId) => {
+        try {
+          await base(airtableTableName).update(activityId, {
+            "Date": null,
+            "Class": null
+          });
+          setMessage('Activity unscheduled successfully!');
+          fetchActivities();
+        } catch (error) {
+          setMessage(`Error unscheduling activity: ${error.message}`);
+          console.error(error);
+        }
+        closeModal();
+        setConfirmDelete(null);
+      };
+      
+      const handlePermanentDelete = async (activityId) => {
           try {
             await base(airtableTableName).destroy(activityId);
-            setMessage('Activity deleted successfully!');
+            setMessage('Activity permanently deleted!');
             fetchActivities(); // Refresh data from Airtable
           } catch (error) {
             setMessage(`Error deleting activity: ${error.message}`);
@@ -316,7 +333,12 @@
           const { name, value } = e.target;
           setFormData({ ...formData, [name]: value });
         };
-    
+        
+        // Determina qué función de eliminación se usará
+        const isScheduled = selectedActivity && selectedActivity.date;
+        const handleDeleteFunction = isScheduled ? handleUnschedule : handlePermanentDelete;
+        const deleteButtonText = isScheduled ? 'Unschedule' : 'Delete Permanently';
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
             <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
@@ -350,7 +372,7 @@
                     name="class"
                     value={formData.class || ''}
                     onChange={handleChange}
-                    disabled={!selectedActivity || !selectedActivity.date}
+                    disabled={!isScheduled}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
                   >
                     <option value="">Unscheduled</option>
@@ -364,7 +386,7 @@
                     name="date"
                     value={formData.date || ''}
                     onChange={handleChange}
-                    disabled={!selectedActivity || !selectedActivity.date}
+                    disabled={!isScheduled}
                     className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 disabled:bg-gray-200 disabled:cursor-not-allowed"
                   />
                 </div>
@@ -385,7 +407,7 @@
                     onClick={() => setConfirmDelete(selectedActivity.id)}
                     className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
                   >
-                    Delete
+                    {deleteButtonText}
                   </button>
                 )}
                 <button
@@ -554,8 +576,8 @@
           {isModalOpen && <ActivityModal />}
           {message && <MessageBox message={message} onClose={() => setMessage('')} />}
           {confirmDelete && <ConfirmationBox
-            message="Are you sure you want to delete this activity?"
-            onConfirm={() => handleDelete(confirmDelete)}
+            message={selectedActivity.date ? "Are you sure you want to unschedule this activity?" : "Are you sure you want to permanently delete this activity?"}
+            onConfirm={selectedActivity.date ? () => handleUnschedule(confirmDelete) : () => handlePermanentDelete(confirmDelete)}
             onCancel={() => setConfirmDelete(null)}
           />}
         </div>
@@ -646,7 +668,6 @@
           const userEmail = result.user.email.toLowerCase().trim();
           
           if (authorizedEmails.includes(userEmail)) {
-            // ✅ Actualización clave: establecer el usuario directamente en el estado aquí
             setUser(result.user);
             console.log("Login exitoso. El estado del usuario se ha actualizado directamente.");
           } else {

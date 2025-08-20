@@ -782,14 +782,27 @@
       const ScheduleModal = () => {
         const scheduleDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
         const classNames = Object.keys(fixedSchedules).filter(c => !classDetails[c]?.isPlanner);
-        const periods = Array.from({ length: 9 }, (_, i) => i + 1);
+        
+        const periodData = [
+            { period: 1, time: '8:30 - 9:15', isLunch: false },
+            { period: 2, time: '9:15 - 10:00', isLunch: false },
+            { period: 3, time: '10:25 - 11:10', isLunch: false },
+            { period: 4, time: '11:10 - 11:50', isLunch: false },
+            { period: 5, time: '12:00 - 12:40', isLunch: false },
+            { period: 6, time: '12:40 - 13:25', isLunch: true, activity: 'Lunch' },
+            { period: 7, time: '13:25 - 14:10', isLunch: false },
+            { period: 8, time: '14:10 - 14:50', isLunch: false },
+            { period: 9, time: '15:05 - 15:45', isLunch: false },
+            { period: 10, time: '15:45 - 16:25', isLunch: false },
+        ];
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 p-4">
             <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-5xl overflow-auto max-h-[90vh]">
               <h2 className="text-xl font-bold mb-4 text-gray-800 text-center">Fixed Class Schedule</h2>
-              <div className="grid grid-cols-[100px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
+              <div className="grid grid-cols-[100px_80px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
                 {/* Header row */}
+                <div className="col-span-1"></div>
                 <div className="col-span-1"></div>
                 {scheduleDays.map(day => (
                   <div key={day} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md p-2 border-b border-gray-300">{day}</div>
@@ -798,18 +811,25 @@
                 {/* Schedule rows */}
                 {classNames.map(className => (
                   <React.Fragment key={className}>
-                    <div className="p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300">
+                    <div className="p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300 row-span-10">
                       {className}
                     </div>
-                    {scheduleDays.map(day => (
-                      <div key={`${className}-${day}`} className="p-2 min-h-[40px] rounded-md shadow-sm border border-gray-200 bg-white space-y-1">
-                        {fixedSchedules[className]?.schedule?.[day]?.map((period, index) => (
-                          <div key={index} className="flex items-center space-x-1">
-                            <span className="font-bold text-gray-600">{period.period}.</span>
-                            <span className="text-gray-800">{period.activity}</span>
+                    {periodData.map((period, periodIndex) => (
+                      <React.Fragment key={`${className}-${period.period}`}>
+                        <div className="p-1 font-semibold text-gray-600 bg-gray-100 rounded-md text-center">
+                          <div className="text-sm font-bold">{period.period}</div>
+                          <div className="text-xs">{period.time}</div>
+                        </div>
+                        {scheduleDays.map(day => (
+                          <div key={`${className}-${day}-${period.period}`} className="p-2 min-h-[40px] rounded-md shadow-sm border border-gray-200 bg-white space-y-1">
+                            {period.isLunch ? (
+                              <div className="p-1 text-sm font-semibold text-gray-800 text-center bg-gray-300 rounded-md">Lunch</div>
+                            ) : (
+                                fixedSchedules[className]?.schedule?.[day]?.[periodIndex]?.activity
+                            )}
                           </div>
                         ))}
-                      </div>
+                      </React.Fragment>
                     ))}
                   </React.Fragment>
                 ))}
@@ -831,16 +851,30 @@
       const EditScheduleModal = () => {
         const scheduleDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
         const classNames = Object.keys(classDetails).filter(c => !classDetails[c]?.isPlanner);
+        const droppableClasses = ['8A1', '8A2', '8R1', '8R2', '8R3', '8R4'];
+        
+        const periodData = [
+            { period: 1, time: '8:30 - 9:15', isLunch: false },
+            { period: 2, time: '9:15 - 10:00', isLunch: false },
+            { period: 3, time: '10:25 - 11:10', isLunch: false },
+            { period: 4, time: '11:10 - 11:50', isLunch: false },
+            { period: 5, time: '12:00 - 12:40', isLunch: false },
+            { period: 6, time: '12:40 - 13:25', isLunch: true, activity: 'Lunch' },
+            { period: 7, time: '13:25 - 14:10', isLunch: false },
+            { period: 8, time: '14:10 - 14:50', isLunch: false },
+            { period: 9, time: '15:05 - 15:45', isLunch: false },
+            { period: 10, time: '15:45 - 16:25', isLunch: false },
+        ];
+        
         const [formData, setFormData] = React.useState(() => {
           const initialData = {};
           classNames.forEach(className => {
             initialData[className] = {
               schedule: {
                 ...fixedSchedules[className]?.schedule,
-                // Initialize periods for each day if not present
                 ...scheduleDays.reduce((acc, day) => {
                   if (!fixedSchedules[className]?.schedule?.[day]) {
-                    acc[day] = Array.from({ length: 9 }, (_, i) => ({ period: i + 1, activity: '' }));
+                    acc[day] = periodData.map(p => ({ period: p.period, activity: p.isLunch ? 'Lunch' : '' }));
                   }
                   return acc;
                 }, {})
@@ -849,64 +883,141 @@
           });
           return initialData;
         });
+        
+        const handleDragStartSchedule = (e, className) => {
+            e.dataTransfer.setData("className", className);
+        };
 
-        const handleChange = (e, className, day, periodIndex) => {
-          const { value } = e.target;
-          setFormData(prevData => {
-            const newData = { ...prevData };
-            newData[className].schedule[day][periodIndex].activity = value;
-            return newData;
-          });
+        const handleDragOverSchedule = (e, day, periodIndex) => {
+            e.preventDefault();
+            setDraggedOverCell({ day, periodIndex });
+        };
+        
+        const handleDropSchedule = (e, className, day, periodIndex) => {
+            e.preventDefault();
+            const droppedClassName = e.dataTransfer.getData("className");
+            
+            // Count current number of periods for the dropped class
+            let count = 0;
+            for (const d of scheduleDays) {
+                if (formData[className].schedule[d]) {
+                    count += formData[className].schedule[d].filter(p => p.activity === droppedClassName).length;
+                }
+            }
+
+            if (count >= 6) {
+                setMessage(`Cannot add ${droppedClassName}. Maximum of 6 periods per week per class.`);
+                return;
+            }
+
+            setFormData(prevData => {
+                const newData = { ...prevData };
+                const newSchedule = [...newData[className].schedule[day]];
+                newSchedule[periodIndex].activity = droppedClassName;
+                newData[className].schedule[day] = newSchedule;
+                return newData;
+            });
+            setDraggedOverCell(null);
+        };
+        
+        const handleRemoveSchedule = (className, day, periodIndex) => {
+             setFormData(prevData => {
+                const newData = { ...prevData };
+                const newSchedule = [...newData[className].schedule[day]];
+                newSchedule[periodIndex].activity = '';
+                newData[className].schedule[day] = newSchedule;
+                return newData;
+            });
+        };
+        
+        const isDraggedOver = (className, day, periodIndex) => {
+            return draggedOverCell?.day === day && draggedOverCell?.periodIndex === periodIndex && className === draggedOverCell.className;
         };
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 p-4">
-            <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-5xl overflow-auto max-h-[90vh]">
-              <h2 className="text-xl font-bold mb-4 text-gray-800 text-center">Edit Fixed Class Schedule</h2>
-              <div className="grid grid-cols-[100px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
-                {/* Header row */}
-                <div className="col-span-1"></div>
-                {scheduleDays.map(day => (
-                  <div key={day} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md p-2 border-b border-gray-300">{day}</div>
-                ))}
-                
-                {/* Schedule rows */}
-                {classNames.map(className => (
-                  <React.Fragment key={className}>
-                    <div className="p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300">
-                      {className}
-                    </div>
-                    {scheduleDays.map(day => (
-                      <div key={`${className}-${day}`} className="p-2 min-h-[40px] rounded-md shadow-sm border border-gray-200 bg-white space-y-1">
-                        {formData[className]?.schedule[day]?.map((period, index) => (
-                          <div key={index} className="flex items-center space-x-1">
-                            <span className="font-bold text-gray-600">{period.period}.</span>
-                            <input
-                              type="text"
-                              value={period.activity}
-                              onChange={(e) => handleChange(e, className, day, index)}
-                              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
-                            />
-                          </div>
-                        ))}
-                      </div>
+            <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-7xl overflow-auto max-h-[90vh] flex">
+              
+              {/* Left Panel: Droppable Classes */}
+              <div className="w-1/4 p-4 bg-gray-100 rounded-xl shadow-inner mr-4">
+                  <h3 className="text-lg font-bold mb-4 text-center text-white bg-gray-800 rounded-md p-2 -m-2 mb-2">Drag and Drop Classes</h3>
+                  <div className="space-y-2">
+                    {droppableClasses.map(c => (
+                        <div
+                          key={c}
+                          className={`p-2 text-sm text-center text-white cursor-grab rounded-md shadow-md ${classColors[c]}`}
+                          draggable
+                          onDragStart={(e) => handleDragStartSchedule(e, c)}
+                        >
+                          {c}
+                        </div>
                     ))}
-                  </React.Fragment>
-                ))}
+                  </div>
               </div>
-              <div className="mt-6 flex justify-end space-x-3">
-                <button
-                  onClick={closeEditScheduleModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => handleSaveSchedule(formData)}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
-                >
-                  Save Schedule
-                </button>
+              
+              {/* Right Panel: The Schedule Table */}
+              <div className="flex-1 overflow-auto">
+                  <h2 className="text-xl font-bold mb-4 text-gray-800 text-center">Edit Fixed Class Schedule</h2>
+                  <div className="grid grid-cols-[80px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
+                      {/* Header row */}
+                      <div className="col-span-1"></div>
+                      {scheduleDays.map(day => (
+                          <div key={day} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md p-2 border-b border-gray-300">{day}</div>
+                      ))}
+                      
+                      {/* Class Rows */}
+                      {classNames.map(className => (
+                          <React.Fragment key={className}>
+                              <div className="p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300 row-span-10">
+                                {className}
+                              </div>
+                              {periodData.map((period, periodIndex) => (
+                                  <React.Fragment key={`${className}-${period.period}`}>
+                                      <div className="p-1 font-semibold text-gray-600 bg-gray-100 rounded-md text-center">
+                                          <div className="text-sm font-bold">{period.period}</div>
+                                          <div className="text-xs">{period.time}</div>
+                                      </div>
+                                      {scheduleDays.map(day => (
+                                          <div
+                                              key={`${className}-${day}-${period.period}`}
+                                              className={`p-1 min-h-[40px] rounded-md shadow-sm border border-gray-200 transition-colors duration-200 ${
+                                                  period.isLunch ? 'bg-gray-300' : 'bg-white'
+                                              } ${isDraggedOver(className, day, periodIndex) ? 'bg-blue-100' : ''}`}
+                                              onDragOver={(e) => !period.isLunch && handleDragOverSchedule(e, day, periodIndex)}
+                                              onDragLeave={() => !period.isLunch && setDraggedOverCell(null)}
+                                              onDrop={(e) => !period.isLunch && handleDropSchedule(e, className, day, periodIndex)}
+                                          >
+                                              {period.isLunch ? (
+                                                  <div className="p-1 text-sm font-semibold text-gray-800 text-center">Lunch</div>
+                                              ) : (
+                                                  <div
+                                                      onClick={() => handleRemoveSchedule(className, day, periodIndex)}
+                                                      className={`p-1 text-sm text-center text-white rounded-md shadow-sm cursor-pointer ${classColors[formData[className]?.schedule[day]?.[periodIndex]?.activity] || 'bg-transparent'}`}
+                                                  >
+                                                      {formData[className]?.schedule[day]?.[periodIndex]?.activity}
+                                                  </div>
+                                              )}
+                                          </div>
+                                      ))}
+                                  </React.Fragment>
+                              ))}
+                          </React.Fragment>
+                      ))}
+                  </div>
+                  <div className="mt-6 flex justify-end space-x-3">
+                      <button
+                          onClick={closeEditScheduleModal}
+                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                      >
+                          Cancel
+                      </button>
+                      <button
+                          onClick={() => handleSaveSchedule(formData)}
+                          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                      >
+                          Save Schedule
+                      </button>
+                  </div>
               </div>
             </div>
           </div>

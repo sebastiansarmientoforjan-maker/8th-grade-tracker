@@ -357,7 +357,7 @@
           const batch = db.batch();
           for (const teacher of teacherData) {
             const docRef = teachersRef.doc(teacher.class);
-            batch.set(docRef, { name: teacher.name, class: teacher.class });
+            batch.set(docRef, { name: teacher.teacher, class: teacher.class });
           }
           await batch.commit();
           fetchData();
@@ -397,7 +397,7 @@
                         "description": template.description,
                         "unit": template.unit,
                         "classType": template.classType || 'Standard',
-                        "day": newDate,
+                        "day": newDate.getDay(),
                         "class": newClass,
                         "userId": userUID
                     });

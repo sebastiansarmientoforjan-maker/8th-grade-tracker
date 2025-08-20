@@ -103,7 +103,12 @@
       const [message, setMessage] = React.useState('');
       const [loading, setLoading] = React.useState(true);
       const [confirmDelete, setConfirmDelete] = React.useState(null);
-    
+      
+      const [plannedHours, setPlannedHours] = React.useState({
+        advanced: 0,
+        standard: 0
+      });
+
       // Firestore connections
       const db = firebase.firestore();
       const userUID = user.uid;
@@ -113,15 +118,21 @@
 
       const getWeekdays = (startDate) => {
         const weekdays = [];
+        const start = new Date(startDate);
         for (let i = 0; i < 5; i++) {
-          const day = new Date(startDate);
-          day.setDate(startDate.getDate() + i);
+          const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
           weekdays.push(day);
         }
         return weekdays;
       };
     
       const weekdays = getWeekdays(currentWeekStart);
+
+      // Helper function to parse a YYYY-MM-DD string into a Date object in local time
+      const parseLocalDate = (dateString) => {
+        const [year, month, day] = dateString.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
     
       const fetchData = async () => {
         try {
@@ -165,6 +176,12 @@
         console.log('useEffect triggered for fetching data.');
         fetchData();
       }, []);
+
+      React.useEffect(() => {
+        const advancedCount = scheduledActivities.filter(act => act.classType === 'Advanced').length;
+        const standardCount = scheduledActivities.filter(act => act.classType === 'Standard').length;
+        setPlannedHours({ advanced: advancedCount, standard: standardCount });
+      }, [scheduledActivities]);
     
       const handlePreviousWeek = () => {
         setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() - 7));
@@ -209,7 +226,7 @@
                         "title": activityData.title,
                         "description": activityData.description,
                         "unit": activityData.unit,
-                        "classType": activityData.classType
+                        "classType": activityData.classType || 'Standard'
                     });
                 } else {
                     await templatesRef.add({
@@ -328,7 +345,7 @@
               "title": template.title,
               "description": template.description,
               "unit": template.unit,
-              "classType": template.classType,
+              "classType": template.classType || 'Standard',
               "date": newDate.toISOString().split('T')[0],
               "class": newClass,
               "userId": userUID // Add userId for future potential rules
@@ -610,6 +627,28 @@
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1 text-center">
               <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
+              {/* Added Planned Hours Table */}
+              <div className="mt-4">
+                  <h3 className="text-md font-bold mb-2 text-gray-600">Planned Hours Overview</h3>
+                  <table className="mx-auto w-full max-w-xs text-left text-sm text-gray-500 rounded-lg overflow-hidden">
+                      <thead className="text-xs text-gray-700 uppercase bg-gray-200">
+                          <tr>
+                              <th scope="col" className="px-6 py-3">Class Type</th>
+                              <th scope="col" className="px-6 py-3">Planned Activities</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          <tr className="bg-white border-b">
+                              <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">Advanced</th>
+                              <td className="px-6 py-4">{plannedHours.advanced}</td>
+                          </tr>
+                          <tr className="bg-white">
+                              <th scope="row" className="px-6 py-4 font-medium text-gray-900 whitespace-nowrap">Standard</th>
+                              <td className="px-6 py-4">{plannedHours.standard}</td>
+                          </tr>
+                      </tbody>
+                  </table>
+              </div>
             </div>
             <div className="flex flex-col items-end space-y-2">
                 <div className="flex items-center space-x-4">
@@ -715,9 +754,13 @@
                       </div>
                       {/* Daily cells for each class */}
                       {weekdays.map(day => {
-                        const dayActivities = scheduledActivities.filter(act =>
-                          act.date === day.toISOString().split('T')[0] && act.class === c
-                        );
+                        const dayActivities = scheduledActivities.filter(act => {
+                          const activityDate = parseLocalDate(act.date);
+                          return activityDate.getFullYear() === day.getFullYear() && 
+                                 activityDate.getMonth() === day.getMonth() && 
+                                 activityDate.getDate() === day.getDate() && 
+                                 act.class === c;
+                        });
                         const formattedDate = day.toISOString().split('T')[0];
                         const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
                         const holiday = getHolidayForDay(day, c);

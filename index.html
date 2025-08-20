@@ -357,7 +357,8 @@
           const batch = db.batch();
           for (const teacher of teacherData) {
             const docRef = teachersRef.doc(teacher.class);
-            batch.set(docRef, { name: teacher.teacher, class: teacher.class });
+            const teacherName = teacher.teacher !== undefined ? teacher.teacher : '';
+            batch.set(docRef, { name: teacherName, class: teacher.class });
           }
           await batch.commit();
           fetchData();

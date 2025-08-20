@@ -71,19 +71,34 @@
     
     // Main application component
     function App({ user, onSignOut }) {
-      const classes = ['8A1', '8A2', '8R1', '8R2', '8R3', '8R4'];
+      
+      const authorizedAdmin = 'ssarmiento@craighouse.cl';
+      const isAdministrator = user.email === authorizedAdmin;
+
+      const [classDetails, setClassDetails] = React.useState({
+        '8A Planner': { name: '8A Planner', teacher: null, isPlanner: true, type: 'A' },
+        '8A1': { name: '8A1', teacher: null, isPlanner: false, type: 'A' },
+        '8A2': { name: '8A2', teacher: null, isPlanner: false, type: 'A' },
+        '8R Planner': { name: '8R Planner', teacher: null, isPlanner: true, type: 'R' },
+        '8R1': { name: '8R1', teacher: null, isPlanner: false, type: 'R' },
+        '8R2': { name: '8R2', teacher: null, isPlanner: false, type: 'R' },
+        '8R3': { name: '8R3', teacher: null, isPlanner: false, type: 'R' },
+        '8R4': { name: '8R4', teacher: null, isPlanner: false, type: 'R' },
+      });
+
+      const classes = Object.keys(classDetails);
+      
       const classColors = {
-        '8A1': 'bg-[#FF6B6B]', // Bright Red
-        '8A2': 'bg-[#FFB347]', // Bright Orange
-        '8R1': 'bg-[#F2D735]', // A more visible yellow
-        '8R2': 'bg-[#77DD77]', // Bright Green
-        '8R3': 'bg-[#64B5F6]', // Bright Blue
-        '8R4': 'bg-[#9575CD]', // Bright Purple
+        '8A1': 'bg-[#FF6B6B]',
+        '8A2': 'bg-[#FFB347]',
+        '8R1': 'bg-[#F2D735]',
+        '8R2': 'bg-[#77DD77]',
+        '8R3': 'bg-[#64B5F6]',
+        '8R4': 'bg-[#9575CD]',
+        '8A Planner': 'bg-gray-400',
+        '8R Planner': 'bg-gray-400'
       };
       
-      const authorizedHolidayManager = 'ssarmiento@craighouse.cl';
-      const isHolidayManager = user.email === authorizedHolidayManager;
-    
       const [currentWeekStart, setCurrentWeekStart] = React.useState(() => {
         const today = new Date();
         const dayOfWeek = today.getDay();
@@ -92,6 +107,7 @@
         return startOfWeek;
       });
       const [scheduledActivities, setScheduledActivities] = React.useState([]);
+      const [plannerActivities, setPlannerActivities] = React.useState([]);
       const [activityTemplates, setActivityTemplates] = React.useState([]);
       const [holidays, setHolidays] = React.useState([]);
       const [selectedUnit, setSelectedUnit] = React.useState('All');
@@ -99,17 +115,20 @@
       const [selectedHoliday, setSelectedHoliday] = React.useState(null);
       const [isActivityModalOpen, setIsActivityModalOpen] = React.useState(false);
       const [isHolidayModalOpen, setIsHolidayModalOpen] = React.useState(false);
+      const [isTeacherModalOpen, setIsTeacherModalOpen] = React.useState(false);
       const [draggedOverCell, setDraggedOverCell] = React.useState(null);
       const [message, setMessage] = React.useState('');
       const [loading, setLoading] = React.useState(true);
       const [confirmDelete, setConfirmDelete] = React.useState(null);
-      
+
       // Firestore connections
       const db = firebase.firestore();
       const userUID = user.uid;
       const templatesRef = db.collection('activity_templates');
       const scheduledRef = db.collection('scheduled_activities');
       const holidaysRef = db.collection('holidays');
+      const teachersRef = db.collection('teacher_assignments');
+      const plannerRef = db.collection('planner_activities');
 
       const getWeekdays = (startDate) => {
         const weekdays = [];
@@ -132,10 +151,12 @@
       const fetchData = async () => {
         try {
             console.log('Fetching all data from Firestore...');
-            const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot] = await Promise.all([
+            const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot, teachersSnapshot, plannerSnapshot] = await Promise.all([
                 templatesRef.get(),
                 scheduledRef.get(),
                 holidaysRef.get(),
+                teachersRef.get(),
+                plannerRef.get(),
             ]);
 
             const fetchedTemplates = templatesSnapshot.docs.map(doc => ({
@@ -154,10 +175,31 @@
                     class: Array.isArray(data.class) ? data.class : [data.class]
                 };
             });
-
+            const fetchedTeachers = teachersSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedPlanner = plannerSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            
+            // Merge fetched teachers into classDetails state
+            setClassDetails(prevDetails => {
+              const newDetails = { ...prevDetails };
+              fetchedTeachers.forEach(teacher => {
+                if (newDetails[teacher.class]) {
+                  newDetails[teacher.class].teacher = teacher.name;
+                }
+              });
+              return newDetails;
+            });
+            
             setActivityTemplates(fetchedTemplates);
             setScheduledActivities(fetchedScheduled);
             setHolidays(fetchedHolidays);
+            setPlannerActivities(fetchedPlanner);
+            
             console.log('All state updated.');
         } catch (error) {
             setMessage(`Error fetching data: ${error.message}`);
@@ -196,6 +238,13 @@
         setIsHolidayModalOpen(false);
         setSelectedHoliday(null);
       };
+
+      const openTeacherModal = () => {
+        setIsTeacherModalOpen(true);
+      };
+      const closeTeacherModal = () => {
+        setIsTeacherModalOpen(false);
+      };
     
       const handleSave = async (activityData, isScheduled) => {
         try {
@@ -223,7 +272,7 @@
                         "description": activityData.description,
                         "unit": activityData.unit,
                         "classType": activityData.classType,
-                        "userId": userUID // Add userId for future potential rules
+                        "userId": userUID
                     });
                 }
             }
@@ -302,6 +351,22 @@
           setConfirmDelete(null);
           closeActivityModal();
       };
+
+      const handleSaveTeachers = async (teacherData) => {
+        try {
+          const batch = db.batch();
+          for (const teacher of teacherData) {
+            const docRef = teachersRef.doc(teacher.class);
+            batch.set(docRef, { name: teacher.name, class: teacher.class });
+          }
+          await batch.commit();
+          fetchData();
+          closeTeacherModal();
+        } catch (error) {
+          setMessage(`Error saving teachers: ${error.message}`);
+          console.error(error);
+        }
+      };
     
       const handleDragStart = (e, activity) => {
         e.dataTransfer.setData("templateId", activity.id);
@@ -321,31 +386,54 @@
         const templateId = e.dataTransfer.getData("templateId");
         const template = activityTemplates.find(t => t.id === templateId);
         
-        const holidayForDay = getHolidayForDay(newDate, newClass);
-        if (holidayForDay) {
-            setMessage('Cannot schedule an activity on a holiday.');
-            setDraggedOverCell(null);
-            return;
-        }
+        const isPlannerRow = classDetails[newClass]?.isPlanner;
 
-        if (template) {
-            const scheduledData = {
-              "templateId": template.id,
-              "title": template.title,
-              "description": template.description,
-              "unit": template.unit,
-              "classType": template.classType || 'Standard',
-              "date": newDate.toISOString().split('T')[0],
-              "class": newClass,
-              "userId": userUID // Add userId for future potential rules
-            };
-            
-            try {
-                await scheduledRef.add(scheduledData);
-                fetchData();
-            } catch (error) {
-                setMessage(`Error scheduling activity: ${error.message}`);
-                console.error(error);
+        if (isPlannerRow) {
+            if (template) {
+                try {
+                    await plannerRef.add({
+                        "templateId": template.id,
+                        "title": template.title,
+                        "description": template.description,
+                        "unit": template.unit,
+                        "classType": template.classType || 'Standard',
+                        "day": newDate,
+                        "class": newClass,
+                        "userId": userUID
+                    });
+                    fetchData();
+                } catch (error) {
+                    setMessage(`Error adding to planner: ${error.message}`);
+                    console.error(error);
+                }
+            }
+        } else {
+            const holidayForDay = getHolidayForDay(newDate, newClass);
+            if (holidayForDay) {
+                setMessage('Cannot schedule an activity on a holiday.');
+                setDraggedOverCell(null);
+                return;
+            }
+
+            if (template) {
+                const scheduledData = {
+                  "templateId": template.id,
+                  "title": template.title,
+                  "description": template.description,
+                  "unit": template.unit,
+                  "classType": template.classType || 'Standard',
+                  "date": newDate.toISOString().split('T')[0],
+                  "class": newClass,
+                  "userId": userUID
+                };
+                
+                try {
+                    await scheduledRef.add(scheduledData);
+                    fetchData();
+                } catch (error) {
+                    setMessage(`Error scheduling activity: ${error.message}`);
+                    console.error(error);
+                }
             }
         }
         setDraggedOverCell(null);
@@ -433,7 +521,7 @@
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                       >
                         <option value="">Unscheduled</option>
-                        {classes.map(c => <option key={c} value={c}>{c}</option>)}
+                        {Object.keys(classDetails).filter(c => !classDetails[c].isPlanner).map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
                     </div>
                     <div>
@@ -541,7 +629,7 @@
                       <div>
                           <label className="block text-sm font-medium text-gray-700 mb-2">Applies to Class(es)</label>
                           <div className="flex flex-wrap gap-2">
-                              {['All', ...classes].map(c => (
+                              {['All', ...Object.keys(classDetails).filter(c => !classDetails[c].isPlanner)].map(c => (
                                   <label key={c} className="flex items-center space-x-2 text-sm font-medium text-gray-700">
                                       <input
                                           type="checkbox"
@@ -590,6 +678,60 @@
           </div>
         );
       };
+
+      const TeacherModal = () => {
+        const [formData, setFormData] = React.useState(() => {
+          return Object.values(classDetails)
+            .filter(c => !c.isPlanner)
+            .map(c => ({ class: c.name, teacher: c.teacher || '' }));
+        });
+
+        const handleChange = (e, index) => {
+          const { value } = e.target;
+          setFormData(prevData => {
+            const newData = [...prevData];
+            newData[index].teacher = value;
+            return newData;
+          });
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+            <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-800">Manage Teachers</h2>
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {formData.map((item, index) => (
+                  <div key={item.class} className="flex items-center space-x-2">
+                    <label className="block text-sm font-medium text-gray-700 w-1/4">{item.class}</label>
+                    <input
+                      type="text"
+                      name="teacher"
+                      value={item.teacher}
+                      onChange={(e) => handleChange(e, index)}
+                      className="mt-1 block w-3/4 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      placeholder="Enter teacher name"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={closeTeacherModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSaveTeachers(formData)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      };
     
       if (loading) {
         return (
@@ -609,6 +751,21 @@
         });
         return foundHoliday || null;
       };
+      
+      const getPlannerActivitiesForDay = (day, className) => {
+        const dayIndex = day.getDay() === 0 ? 6 : day.getDay() - 1; // 0=Mon, 1=Tue, ...
+        return plannerActivities.filter(pa => pa.class === className && pa.day === dayIndex);
+      };
+      
+      const handlePlannerActivityDelete = async (plannerId) => {
+        try {
+          await plannerRef.doc(plannerId).delete();
+          fetchData();
+        } catch (error) {
+          setMessage(`Error deleting planned activity: ${error.message}`);
+          console.error(error);
+        }
+      };
 
       return (
         <div className="font-sans antialiased text-gray-800 bg-[#F8F8F8] min-h-screen p-4 flex flex-col">
@@ -627,13 +784,21 @@
                       Sign Out
                     </button>
                 </div>
-                {isHolidayManager && (
-                  <button
-                      onClick={() => openHolidayModal()}
-                      className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
-                  >
-                      Manage Holidays
-                  </button>
+                {isAdministrator && (
+                  <div className="flex space-x-2">
+                    <button
+                        onClick={() => openTeacherModal()}
+                        className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+                    >
+                        Manage Teachers
+                    </button>
+                    <button
+                        onClick={() => openHolidayModal()}
+                        className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+                    >
+                        Manage Holidays
+                    </button>
+                  </div>
                 )}
             </div>
           </div>
@@ -713,68 +878,117 @@
                   ))}
     
                   {/* Class Rows */}
-                  {classes.map(c => (
-                    <React.Fragment key={c}>
-                      {/* Class row header */}
-                      <div className={`p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300`}>
-                        {c}
-                      </div>
-                      {/* Daily cells for each class */}
-                      {weekdays.map(day => {
-                        const dayActivities = scheduledActivities.filter(act => {
-                          const activityDate = parseLocalDate(act.date);
-                          return activityDate.getFullYear() === day.getFullYear() && 
-                                 activityDate.getMonth() === day.getMonth() && 
-                                 activityDate.getDate() === day.getDate() && 
-                                 act.class === c;
-                        });
-                        const formattedDate = day.toISOString().split('T')[0];
-                        const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
-                        const holiday = getHolidayForDay(day, c);
-                        const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'} ${holiday ? 'bg-purple-100 cursor-pointer' : ''}`;
-    
-                        return (
-                          <div
-                            key={`${formattedDate}-${c}`}
-                            className={cellClasses}
-                            onDragOver={(e) => handleDragOver(e, day, c)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, day, c)}
-                            onClick={() => { if (holiday && isHolidayManager) openHolidayModal(holiday); }}
-                          >
-                            <div className="space-y-1">
-                              {holiday ? (
-                                <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
-                              ) : (
-                                dayActivities.map(activity => {
-                                  let unitPrefix = '';
-                                  if (activity.unit) {
-                                      const unitNumber = activity.unit.split(' ')[1];
-                                      unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-                                  }
-                                  const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
-                                  return (
-                                  <div
-                                    key={activity.id}
-                                    className={`p-1 text-xs text-white rounded-md shadow-sm cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
-                                    onClick={(e) => { e.stopPropagation(); openActivityModal(activity, true); }}
-                                  >
-                                    {classTypePrefix}{unitPrefix}{activity.title}
+                  {classes.map(c => {
+                    const classInfo = classDetails[c];
+                    return (
+                      <React.Fragment key={c}>
+                        {/* Class row header */}
+                        <div className={`p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex flex-col items-center justify-center text-center border-r border-gray-300`}>
+                          {classInfo.name}
+                          {classInfo.teacher && <span className="text-xs font-normal text-gray-500 mt-1">{classInfo.teacher}</span>}
+                        </div>
+                        {/* Daily cells for each class */}
+                        {weekdays.map(day => {
+                          const formattedDate = classInfo.isPlanner ? day.getDay() : day.toISOString().split('T')[0];
+                          const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
+                          const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'}`;
+                          
+                          if (classInfo.isPlanner) {
+                            // Render planner cells
+                            const activities = getPlannerActivitiesForDay(day, c);
+                            return (
+                                <div
+                                  key={`${c}-${day.toDateString()}`}
+                                  className={cellClasses}
+                                  onDragOver={(e) => handleDragOver(e, day.getDay(), c)}
+                                  onDragLeave={handleDragLeave}
+                                  onDrop={(e) => handleDrop(e, day.getDay(), c)}
+                                >
+                                  <div className="space-y-1">
+                                    {activities.map((activity) => {
+                                      let unitPrefix = '';
+                                      if (activity.unit) {
+                                          const unitNumber = activity.unit.split(' ')[1];
+                                          unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+                                      }
+                                      const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
+                                      return (
+                                        <div 
+                                          key={activity.id}
+                                          className={`group relative p-1 text-xs text-white rounded-md shadow-sm ${classColors[c]}`}
+                                        >
+                                          {classTypePrefix}{unitPrefix}{activity.title}
+                                          {isAdministrator && (
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); handlePlannerActivityDelete(activity.id); }}
+                                              className="absolute top-0 right-0 p-1 text-white bg-red-500 rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                            >
+                                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                            </button>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
                                   </div>
-                                )})
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </React.Fragment>
-                  ))}
+                                </div>
+                              );
+                          } else {
+                            // Render regular scheduled cells
+                            const dayActivities = scheduledActivities.filter(act => {
+                              const activityDate = parseLocalDate(act.date);
+                              return activityDate.getFullYear() === day.getFullYear() && 
+                                     activityDate.getMonth() === day.getMonth() && 
+                                     activityDate.getDate() === day.getDate() && 
+                                     act.class === c;
+                            });
+                            const holiday = getHolidayForDay(day, c);
+                            const holidayCellClasses = holiday ? 'bg-purple-100 cursor-pointer' : '';
+
+                            return (
+                              <div
+                                key={`${c}-${formattedDate}`}
+                                className={`${cellClasses} ${holidayCellClasses}`}
+                                onDragOver={(e) => handleDragOver(e, day, c)}
+                                onDragLeave={handleDragLeave}
+                                onDrop={(e) => handleDrop(e, day, c)}
+                                onClick={() => { if (holiday && isAdministrator) openHolidayModal(holiday); }}
+                              >
+                                <div className="space-y-1">
+                                  {holiday ? (
+                                    <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
+                                  ) : (
+                                    dayActivities.map(activity => {
+                                      let unitPrefix = '';
+                                      if (activity.unit) {
+                                          const unitNumber = activity.unit.split(' ')[1];
+                                          unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+                                      }
+                                      const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
+                                      return (
+                                      <div
+                                        key={activity.id}
+                                        className={`p-1 text-xs text-white rounded-md shadow-sm cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
+                                        onClick={(e) => { e.stopPropagation(); openActivityModal(activity, true); }}
+                                      >
+                                        {classTypePrefix}{unitPrefix}{activity.title}
+                                      </div>
+                                    )})
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          }
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
                 </div>
               </div>
             </div>
           </div>
           {isActivityModalOpen && <ActivityModal />}
           {isHolidayModalOpen && <HolidayModal />}
+          {isTeacherModalOpen && <TeacherModal />}
           {message && <MessageBox message={message} onClose={() => setMessage('')} />}
           {confirmDelete && selectedActivity && (selectedActivity.isScheduled ? (
               <ConfirmationBox

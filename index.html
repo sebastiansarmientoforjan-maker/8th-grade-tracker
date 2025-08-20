@@ -893,32 +893,67 @@
             setDraggedOverCell({ day, periodIndex });
         };
         
-        const handleDropSchedule = (e, className, day, periodIndex) => {
+        const handleDropSchedule = (e, day, periodIndex) => {
             e.preventDefault();
             const droppedClassName = e.dataTransfer.getData("className");
             
+            // Check if this period is already filled with a class
+            const existingClass = classNames.find(c => formData[c].schedule[day][periodIndex].activity);
+            if (existingClass && existingClass !== droppedClassName) {
+              setMessage(`This period is already assigned to ${existingClass}.`);
+              setDraggedOverCell(null);
+              return;
+            }
+
             // Count current number of periods for the dropped class
             let count = 0;
-            for (const d of scheduleDays) {
-                if (formData[className].schedule[d]) {
-                    count += formData[className].schedule[d].filter(p => p.activity === droppedClassName).length;
-                }
-            }
+            classNames.forEach(c => {
+              scheduleDays.forEach(d => {
+                periodData.forEach((p, pIndex) => {
+                  if (formData[c].schedule[d][pIndex].activity === droppedClassName) {
+                    count++;
+                  }
+                });
+              });
+            });
 
             if (count >= 6) {
                 setMessage(`Cannot add ${droppedClassName}. Maximum of 6 periods per week per class.`);
                 return;
             }
-
+            
             setFormData(prevData => {
                 const newData = { ...prevData };
-                const newSchedule = [...newData[className].schedule[day]];
-                newSchedule[periodIndex].activity = droppedClassName;
-                newData[className].schedule[day] = newSchedule;
+                
+                // Clear the previous instance of the dropped class
+                classNames.forEach(c => {
+                  scheduleDays.forEach(d => {
+                    periodData.forEach((p, pIndex) => {
+                      if (newData[c].schedule[d][pIndex].activity === droppedClassName) {
+                        newData[c].schedule[d][pIndex].activity = '';
+                      }
+                    });
+                  });
+                });
+                
+                // Set the new instance
+                const newSchedule = [...newData[classNames[0]].schedule[day]]; // Use a placeholder to get correct dimensions
+                
+                // Loop through all classes and set the new activity
+                classNames.forEach(c => {
+                  const newSchedule = [...newData[c].schedule[day]];
+                  newSchedule[periodIndex].activity = '';
+                  if (c === droppedClassName) {
+                    newSchedule[periodIndex].activity = droppedClassName;
+                  }
+                  newData[c].schedule[day] = newSchedule;
+                });
+                
                 return newData;
             });
             setDraggedOverCell(null);
         };
+
         
         const handleRemoveSchedule = (className, day, periodIndex) => {
              setFormData(prevData => {
@@ -930,9 +965,20 @@
             });
         };
         
-        const isDraggedOver = (className, day, periodIndex) => {
-            return draggedOverCell?.day === day && draggedOverCell?.periodIndex === periodIndex && className === draggedOverCell.className;
+        const isDraggedOver = (day, periodIndex) => {
+            return draggedOverCell?.day === day && draggedOverCell?.periodIndex === periodIndex;
         };
+
+        // Helper function to find which class is in a specific period/day
+        const findClassForPeriod = (day, periodIndex) => {
+            for (const className of classNames) {
+                if (formData[className]?.schedule?.[day]?.[periodIndex]?.activity) {
+                    return formData[className].schedule[day][periodIndex].activity;
+                }
+            }
+            return null;
+        };
+
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 p-4">
@@ -942,65 +988,69 @@
               <div className="w-1/4 p-4 bg-gray-100 rounded-xl shadow-inner mr-4">
                   <h3 className="text-lg font-bold mb-4 text-center text-white bg-gray-800 rounded-md p-2 -m-2 mb-2">Drag and Drop Classes</h3>
                   <div className="space-y-2">
-                    {droppableClasses.map(c => (
-                        <div
-                          key={c}
-                          className={`p-2 text-sm text-center text-white cursor-grab rounded-md shadow-md ${classColors[c]}`}
-                          draggable
-                          onDragStart={(e) => handleDragStartSchedule(e, c)}
-                        >
-                          {c}
-                        </div>
-                    ))}
+                    {droppableClasses.map(c => {
+                        const count = scheduleDays.reduce((acc, day) => {
+                          const periods = formData[c]?.schedule?.[day] || [];
+                          return acc + periods.filter(p => p.activity === c).length;
+                        }, 0);
+                        return (
+                          <div
+                            key={c}
+                            className={`relative p-2 text-sm text-center text-white cursor-grab rounded-md shadow-md ${classColors[c]}`}
+                            draggable
+                            onDragStart={(e) => handleDragStartSchedule(e, c)}
+                          >
+                            {c} <span className="text-xs font-bold text-white/50">{count}/6</span>
+                          </div>
+                        );
+                    })}
                   </div>
               </div>
               
               {/* Right Panel: The Schedule Table */}
               <div className="flex-1 overflow-auto">
                   <h2 className="text-xl font-bold mb-4 text-gray-800 text-center">Edit Fixed Class Schedule</h2>
-                  <div className="grid grid-cols-[80px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
+                  <div className="grid grid-cols-[150px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
                       {/* Header row */}
                       <div className="col-span-1"></div>
                       {scheduleDays.map(day => (
                           <div key={day} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md p-2 border-b border-gray-300">{day}</div>
                       ))}
                       
-                      {/* Class Rows */}
-                      {classNames.map(className => (
-                          <React.Fragment key={className}>
-                              <div className="p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300 row-span-10">
-                                {className}
+                      {/* Period Rows */}
+                      {periodData.map((period, periodIndex) => (
+                          <React.Fragment key={period.period}>
+                              <div className="p-1 font-semibold text-gray-600 bg-gray-100 rounded-md text-center">
+                                  <div className="text-sm font-bold">{period.period}</div>
+                                  <div className="text-xs">{period.time}</div>
                               </div>
-                              {periodData.map((period, periodIndex) => (
-                                  <React.Fragment key={`${className}-${period.period}`}>
-                                      <div className="p-1 font-semibold text-gray-600 bg-gray-100 rounded-md text-center">
-                                          <div className="text-sm font-bold">{period.period}</div>
-                                          <div className="text-xs">{period.time}</div>
-                                      </div>
-                                      {scheduleDays.map(day => (
-                                          <div
-                                              key={`${className}-${day}-${period.period}`}
-                                              className={`p-1 min-h-[40px] rounded-md shadow-sm border border-gray-200 transition-colors duration-200 ${
-                                                  period.isLunch ? 'bg-gray-300' : 'bg-white'
-                                              } ${isDraggedOver(className, day, periodIndex) ? 'bg-blue-100' : ''}`}
-                                              onDragOver={(e) => !period.isLunch && handleDragOverSchedule(e, day, periodIndex)}
-                                              onDragLeave={() => !period.isLunch && setDraggedOverCell(null)}
-                                              onDrop={(e) => !period.isLunch && handleDropSchedule(e, className, day, periodIndex)}
-                                          >
-                                              {period.isLunch ? (
-                                                  <div className="p-1 text-sm font-semibold text-gray-800 text-center">Lunch</div>
-                                              ) : (
+                              {scheduleDays.map(day => {
+                                  const assignedClass = findClassForPeriod(day, periodIndex);
+                                  return (
+                                      <div
+                                          key={`${day}-${period.period}`}
+                                          className={`p-1 min-h-[40px] rounded-md shadow-sm border border-gray-200 transition-colors duration-200 ${
+                                              period.isLunch ? 'bg-gray-300' : 'bg-white'
+                                          } ${isDraggedOver(day, periodIndex) ? 'bg-blue-100' : ''}`}
+                                          onDragOver={(e) => !period.isLunch && handleDragOverSchedule(e, day, periodIndex)}
+                                          onDragLeave={() => !period.isLunch && setDraggedOverCell(null)}
+                                          onDrop={(e) => !period.isLunch && handleDropSchedule(e, day, periodIndex)}
+                                      >
+                                          {period.isLunch ? (
+                                              <div className="p-1 text-sm font-semibold text-gray-800 text-center">Lunch</div>
+                                          ) : (
+                                              assignedClass && (
                                                   <div
-                                                      onClick={() => handleRemoveSchedule(className, day, periodIndex)}
-                                                      className={`p-1 text-sm text-center text-white rounded-md shadow-sm cursor-pointer ${classColors[formData[className]?.schedule[day]?.[periodIndex]?.activity] || 'bg-transparent'}`}
+                                                      onClick={() => handleRemoveSchedule(assignedClass, day, periodIndex)}
+                                                      className={`p-1 text-sm text-center text-white rounded-md shadow-sm cursor-pointer ${classColors[assignedClass] || 'bg-transparent'}`}
                                                   >
-                                                      {formData[className]?.schedule[day]?.[periodIndex]?.activity}
+                                                      {assignedClass}
                                                   </div>
-                                              )}
-                                          </div>
-                                      ))}
-                                  </React.Fragment>
-                              ))}
+                                              )
+                                          )}
+                                      </div>
+                                  );
+                              })}
                           </React.Fragment>
                       ))}
                   </div>

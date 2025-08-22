@@ -86,7 +86,6 @@
         '8R4': { name: '8R4', teacher: null, isPlanner: false, type: 'R' },
       });
 
-      // --- START OF MODIFIED CODE ---
       // Create a new array with the desired order
       const customOrder = [
           '8A Planner',
@@ -101,7 +100,6 @@
       
       // Now use this custom order to create the `classes` array
       const classes = ['Tracker', ...customOrder];
-      // --- END OF MODIFIED CODE ---
 
       const classColors = {
         '8A1': 'bg-[#FF6B6B]',
@@ -138,6 +136,7 @@
       const [message, setMessage] = React.useState('');
       const [loading, setLoading] = React.useState(true);
       const [confirmDelete, setConfirmDelete] = React.useState(null);
+      const [error, setError] = React.useState(null); // New error state
 
       // Firestore connections
       const db = firebase.firestore();
@@ -237,6 +236,7 @@
         } catch (error) {
             setMessage(`Error fetching data: ${error.message}`);
             console.error("Error fetching data:", error);
+            setError(error);
         } finally {
             setLoading(false);
         }
@@ -1099,6 +1099,18 @@
           </div>
         );
       };
+      
+      if (error) {
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 p-4 text-center">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+              <h2 className="text-2xl font-bold mb-2 text-red-600">Application Error</h2>
+              <p className="text-gray-600 mb-4">Something went wrong. Please refresh the page.</p>
+              <pre className="bg-gray-100 p-4 rounded-md text-sm text-left overflow-x-auto whitespace-pre-wrap">{error.message}</pre>
+            </div>
+          </div>
+        );
+      }
     
       if (loading) {
         return (

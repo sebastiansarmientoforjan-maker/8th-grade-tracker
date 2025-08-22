@@ -152,6 +152,14 @@
         return new Date(year, month - 1, day);
       };
     
+      // Helper function to format a Date object as a YYYY-MM-DD string in local time
+      const formatLocalDate = (date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+      };
+
       const fetchData = async () => {
         try {
             console.log('Fetching all data from Firestore...');
@@ -467,7 +475,7 @@
                   "description": template.description,
                   "unit": template.unit,
                   "classType": template.classType || 'Standard',
-                  "date": newDate.toISOString().split('T')[0],
+                  "date": formatLocalDate(newDate),
                   "class": newClass,
                   "userId": userUID
                 };
@@ -1244,7 +1252,7 @@
                         </div>
                         {/* Daily cells for each class */}
                         {weekdays.map(day => {
-                          const formattedDate = classInfo.isPlanner ? day.getDay() : day.toISOString().split('T')[0];
+                          const formattedDate = day.toISOString().split('T')[0];
                           const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
                           const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'}`;
                           
@@ -1255,9 +1263,9 @@
                                 <div
                                   key={`${c}-${day.toDateString()}`}
                                   className={cellClasses}
-                                  onDragOver={(e) => handleDragOver(e, day.getDay(), c)}
+                                  onDragOver={(e) => handleDragOver(e, day, c)}
                                   onDragLeave={handleDragLeave}
-                                  onDrop={(e) => handleDrop(e, day.getDay(), c)}
+                                  onDrop={(e) => handleDrop(e, day, c)}
                                 >
                                   <div className="space-y-1">
                                     {activities.map((activity) => {

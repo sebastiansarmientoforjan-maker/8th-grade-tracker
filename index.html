@@ -425,16 +425,16 @@
         e.dataTransfer.setData("templateId", activity.id);
       };
     
-      const handleDragOver = (e, className, periodIndex = null) => {
+      const handleDragOver = (e, className, periodIndex = null, date = null) => {
         e.preventDefault();
-        setDraggedOverCell({ className, periodIndex });
+        setDraggedOverCell({ className, periodIndex, date });
       };
     
       const handleDragLeave = () => {
         setDraggedOverCell(null);
       };
     
-      const handleDrop = async (e, newClass, periodIndex = null) => {
+      const handleDrop = async (e, newClass, periodIndexOrDate) => {
         e.preventDefault();
         const templateId = e.dataTransfer.getData("templateId");
         const template = activityTemplates.find(t => t.id === templateId);
@@ -444,20 +444,13 @@
         if (isPlannerRow) {
             if (template) {
                 try {
-                    // Check if an activity already exists in this period
-                    const existingActivity = plannerActivities.find(pa => pa.class === newClass && pa.periodIndex === periodIndex);
-                    if (existingActivity) {
-                        setMessage('A planned activity already exists in this period. Please remove it before adding a new one.');
-                        setDraggedOverCell(null);
-                        return;
-                    }
                     await plannerRef.add({
                         "templateId": template.id,
                         "title": template.title,
                         "description": template.description,
                         "unit": template.unit,
                         "classType": template.classType || 'Standard',
-                        "periodIndex": periodIndex,
+                        "periodIndex": periodIndexOrDate,
                         "class": newClass,
                         "userId": userUID
                     });
@@ -468,9 +461,7 @@
                 }
             }
         } else {
-            const newDate = new Date(newClass); // This is a temporary abuse of the parameter, let's fix this.
-            // A quick fix to ensure 'newDate' is a valid date object for non-planner rows
-            const formattedDate = newClass;
+            const formattedDate = periodIndexOrDate;
             const day = weekdays.find(d => formatLocalDate(d) === formattedDate);
             
             const holidayForDay = getHolidayForDay(day, newClass);
@@ -1353,7 +1344,7 @@
                             <div
                               key={`${c}-${formattedDate}`}
                               className={`${cellClasses} ${holidayCellClasses}`}
-                              onDragOver={(e) => handleDragOver(e, c, formattedDate)}
+                              onDragOver={(e) => handleDragOver(e, c, null, formattedDate)}
                               onDragLeave={handleDragLeave}
                               onDrop={(e) => handleDrop(e, c, formattedDate)}
                               onClick={() => { if (holiday && isAdministrator) openHolidayModal(holiday); }}

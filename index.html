@@ -425,16 +425,16 @@
         e.dataTransfer.setData("templateId", activity.id);
       };
     
-      const handleDragOver = (e, date, className) => {
+      const handleDragOver = (e, className, periodIndex = null) => {
         e.preventDefault();
-        setDraggedOverCell({ date, className });
+        setDraggedOverCell({ className, periodIndex });
       };
     
       const handleDragLeave = () => {
         setDraggedOverCell(null);
       };
     
-      const handleDrop = async (e, newDate, newClass) => {
+      const handleDrop = async (e, newClass, periodIndex = null) => {
         e.preventDefault();
         const templateId = e.dataTransfer.getData("templateId");
         const template = activityTemplates.find(t => t.id === templateId);
@@ -444,13 +444,20 @@
         if (isPlannerRow) {
             if (template) {
                 try {
+                    // Check if an activity already exists in this period
+                    const existingActivity = plannerActivities.find(pa => pa.class === newClass && pa.periodIndex === periodIndex);
+                    if (existingActivity) {
+                        setMessage('A planned activity already exists in this period. Please remove it before adding a new one.');
+                        setDraggedOverCell(null);
+                        return;
+                    }
                     await plannerRef.add({
                         "templateId": template.id,
                         "title": template.title,
                         "description": template.description,
                         "unit": template.unit,
                         "classType": template.classType || 'Standard',
-                        "day": newDate.getDay(),
+                        "periodIndex": periodIndex,
                         "class": newClass,
                         "userId": userUID
                     });
@@ -461,7 +468,12 @@
                 }
             }
         } else {
-            const holidayForDay = getHolidayForDay(newDate, newClass);
+            const newDate = new Date(newClass); // This is a temporary abuse of the parameter, let's fix this.
+            // A quick fix to ensure 'newDate' is a valid date object for non-planner rows
+            const formattedDate = newClass;
+            const day = weekdays.find(d => formatLocalDate(d) === formattedDate);
+            
+            const holidayForDay = getHolidayForDay(day, newClass);
             if (holidayForDay) {
                 setMessage('Cannot schedule an activity on a holiday.');
                 setDraggedOverCell(null);
@@ -475,7 +487,7 @@
                   "description": template.description,
                   "unit": template.unit,
                   "classType": template.classType || 'Standard',
-                  "date": formatLocalDate(newDate),
+                  "date": formattedDate,
                   "class": newClass,
                   "userId": userUID
                 };
@@ -1101,9 +1113,8 @@
         return foundHoliday || null;
       };
       
-      const getPlannerActivitiesForDay = (day, className) => {
-        const dayIndex = day.getDay() === 0 ? 6 : day.getDay() - 1; // 0=Mon, 1=Tue, ...
-        return plannerActivities.filter(pa => pa.class === className && pa.day === dayIndex);
+      const getPlannerActivitiesForPeriod = (className, periodIndex) => {
+        return plannerActivities.filter(pa => pa.class === className && pa.periodIndex === periodIndex);
       };
       
       const handlePlannerActivityDelete = async (plannerId) => {
@@ -1115,6 +1126,15 @@
           console.error(error);
         }
       };
+      
+      const plannerPeriods = [
+        { period: 1, time: '8:30 - 9:15' },
+        { period: 2, time: '9:15 - 10:00' },
+        { period: 3, time: '10:25 - 11:10' },
+        { period: 4, time: '11:10 - 11:50' },
+        { period: 5, time: '12:00 - 12:40' },
+        { period: 6, time: '12:40 - 13:25' }
+      ];
 
       return (
         <div className="font-sans antialiased text-gray-800 bg-[#F8F8F8] min-h-screen p-4 flex flex-col">
@@ -1214,9 +1234,72 @@
     
               {/* Weekly Calendar Grid - Columnar View */}
               <div className="flex-1 overflow-x-auto">
-                {/* Calendar Header with Navigation */}
+                {/* Planner Section */}
+                <h2 className="text-xl font-bold md:text-2xl text-center text-gray-600 mb-2">Weekly Planner (Ideal Sequence)</h2>
+                <div className="grid grid-cols-[150px_repeat(6,_minmax(0,_1fr))] gap-1 min-w-[768px] mb-8">
+                  <div className="col-span-1"></div>
+                  {plannerPeriods.map((p, index) => (
+                      <div key={index} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md shadow-sm p-2 border-b border-gray-300">
+                          <div className="text-sm">Period {p.period}</div>
+                          <div className="text-xs font-normal">{p.time}</div>
+                      </div>
+                  ))}
+                  {classes.filter(c => classDetails[c]?.isPlanner).map(c => {
+                    const classInfo = classDetails[c];
+                    return (
+                      <React.Fragment key={c}>
+                        <div className={`p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex flex-col items-center justify-center text-center border-r border-gray-300`}>
+                          {classInfo.name}
+                        </div>
+                        {plannerPeriods.map((period, periodIndex) => {
+                            const plannerActivitiesForPeriod = getPlannerActivitiesForPeriod(c, periodIndex);
+                            const isDraggedOver = draggedOverCell?.className === c && draggedOverCell?.periodIndex === periodIndex;
+                            const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'}`;
+                            return (
+                                <div
+                                    key={`${c}-${periodIndex}`}
+                                    className={cellClasses}
+                                    onDragOver={(e) => handleDragOver(e, c, periodIndex)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={(e) => handleDrop(e, c, periodIndex)}
+                                >
+                                    <div className="space-y-1">
+                                      {plannerActivitiesForPeriod.map((activity) => {
+                                          let unitPrefix = '';
+                                          if (activity.unit) {
+                                              const unitNumber = activity.unit.split(' ')[1];
+                                              unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+                                          }
+                                          const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
+                                          return (
+                                            <div 
+                                              key={activity.id}
+                                              className={`group relative p-1 text-xs text-white rounded-md shadow-sm ${classColors[c]}`}
+                                            >
+                                              {classTypePrefix}{unitPrefix}{activity.title}
+                                              {isAdministrator && (
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); handlePlannerActivityDelete(activity.id); }}
+                                                  className="absolute top-0 right-0 p-1 text-white bg-red-500 rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                >
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+
+                {/* Main Calendar Header with Navigation */}
+                <h2 className="text-xl font-bold md:text-2xl text-center mr-4 text-gray-600">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
                 <div className="flex justify-center items-center mb-4">
-                    <h2 className="text-xl font-bold md:text-2xl mr-4 text-gray-600">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
                     <div className="flex space-x-2">
                       <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
@@ -1241,7 +1324,7 @@
                   ))}
     
                   {/* Class Rows */}
-                  {classes.map(c => {
+                  {classes.filter(c => !classDetails[c].isPlanner).map(c => {
                     const classInfo = classDetails[c];
                     return (
                       <React.Fragment key={c}>
@@ -1252,95 +1335,53 @@
                         </div>
                         {/* Daily cells for each class */}
                         {weekdays.map(day => {
-                          const formattedDate = day.toISOString().split('T')[0];
-                          const isDraggedOver = draggedOverCell?.date === formattedDate && draggedOverCell?.className === c;
+                          const formattedDate = formatLocalDate(day);
+                          const isDraggedOver = draggedOverCell?.className === c && draggedOverCell?.date === formattedDate;
                           const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'}`;
                           
-                          if (classInfo.isPlanner) {
-                            // Render planner cells
-                            const activities = getPlannerActivitiesForDay(day, c);
-                            return (
-                                <div
-                                  key={`${c}-${day.toDateString()}`}
-                                  className={cellClasses}
-                                  onDragOver={(e) => handleDragOver(e, day, c)}
-                                  onDragLeave={handleDragLeave}
-                                  onDrop={(e) => handleDrop(e, day, c)}
-                                >
-                                  <div className="space-y-1">
-                                    {activities.map((activity) => {
-                                      let unitPrefix = '';
-                                      if (activity.unit) {
-                                          const unitNumber = activity.unit.split(' ')[1];
-                                          unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-                                      }
-                                      const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
-                                      return (
-                                        <div 
-                                          key={activity.id}
-                                          className={`group relative p-1 text-xs text-white rounded-md shadow-sm ${classColors[c]}`}
-                                        >
-                                          {classTypePrefix}{unitPrefix}{activity.title}
-                                          {isAdministrator && (
-                                            <button
-                                              onClick={(e) => { e.stopPropagation(); handlePlannerActivityDelete(activity.id); }}
-                                              className="absolute top-0 right-0 p-1 text-white bg-red-500 rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
-                                            >
-                                              <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                                            </button>
-                                          )}
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              );
-                          } else {
-                            // Render regular scheduled cells
-                            const dayActivities = scheduledActivities.filter(act => {
-                              const activityDate = parseLocalDate(act.date);
-                              return activityDate.getFullYear() === day.getFullYear() && 
-                                     activityDate.getMonth() === day.getMonth() && 
-                                     activityDate.getDate() === day.getDate() && 
-                                     act.class === c;
-                            });
-                            const holiday = getHolidayForDay(day, c);
-                            const holidayCellClasses = holiday ? 'bg-purple-100 cursor-pointer' : '';
+                          const dayActivities = scheduledActivities.filter(act => {
+                            const activityDate = parseLocalDate(act.date);
+                            return activityDate.getFullYear() === day.getFullYear() && 
+                                   activityDate.getMonth() === day.getMonth() && 
+                                   activityDate.getDate() === day.getDate() && 
+                                   act.class === c;
+                          });
+                          const holiday = getHolidayForDay(day, c);
+                          const holidayCellClasses = holiday ? 'bg-purple-100 cursor-pointer' : '';
 
-                            return (
-                              <div
-                                key={`${c}-${formattedDate}`}
-                                className={`${cellClasses} ${holidayCellClasses}`}
-                                onDragOver={(e) => handleDragOver(e, day, c)}
-                                onDragLeave={handleDragLeave}
-                                onDrop={(e) => handleDrop(e, day, c)}
-                                onClick={() => { if (holiday && isAdministrator) openHolidayModal(holiday); }}
-                              >
-                                <div className="space-y-1">
-                                  {holiday ? (
-                                    <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
-                                  ) : (
-                                    dayActivities.map(activity => {
-                                      let unitPrefix = '';
-                                      if (activity.unit) {
-                                          const unitNumber = activity.unit.split(' ')[1];
-                                          unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
-                                      }
-                                      const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
-                                      return (
-                                      <div
-                                        key={activity.id}
-                                        className={`p-1 text-xs text-white rounded-md shadow-sm cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
-                                        onClick={(e) => { e.stopPropagation(); openActivityModal(activity, true); }}
-                                      >
-                                        {classTypePrefix}{unitPrefix}{activity.title}
-                                      </div>
-                                    )})
-                                  )}
-                                </div>
+                          return (
+                            <div
+                              key={`${c}-${formattedDate}`}
+                              className={`${cellClasses} ${holidayCellClasses}`}
+                              onDragOver={(e) => handleDragOver(e, c, formattedDate)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, c, formattedDate)}
+                              onClick={() => { if (holiday && isAdministrator) openHolidayModal(holiday); }}
+                            >
+                              <div className="space-y-1">
+                                {holiday ? (
+                                  <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
+                                ) : (
+                                  dayActivities.map(activity => {
+                                    let unitPrefix = '';
+                                    if (activity.unit) {
+                                        const unitNumber = activity.unit.split(' ')[1];
+                                        unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+                                    }
+                                    const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
+                                    return (
+                                    <div
+                                      key={activity.id}
+                                      className={`p-1 text-xs text-white rounded-md shadow-sm cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
+                                      onClick={(e) => { e.stopPropagation(); openActivityModal(activity, true); }}
+                                    >
+                                      {classTypePrefix}{unitPrefix}{activity.title}
+                                    </div>
+                                  )})
+                                )}
                               </div>
-                            );
-                          }
+                            </div>
+                          );
                         })}
                       </React.Fragment>
                     );

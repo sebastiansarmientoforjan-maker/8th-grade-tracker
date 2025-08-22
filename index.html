@@ -86,8 +86,23 @@
         '8R4': { name: '8R4', teacher: null, isPlanner: false, type: 'R' },
       });
 
-      const classes = Object.keys(classDetails);
+      // --- START OF MODIFIED CODE ---
+      // Create a new array with the desired order
+      const customOrder = [
+          '8A Planner',
+          '8A1',
+          '8A2',
+          '8R Planner',
+          '8R1',
+          '8R2',
+          '8R3',
+          '8R4',
+      ];
       
+      // Now use this custom order to create the `classes` array
+      const classes = ['Tracker', ...customOrder];
+      // --- END OF MODIFIED CODE ---
+
       const classColors = {
         '8A1': 'bg-[#FF6B6B]',
         '8A2': 'bg-[#FFB347]',
@@ -1044,7 +1059,7 @@
                                               period.isLunch ? 'bg-gray-300' : 'bg-white'
                                           } ${isDraggedOver(day, periodIndex) ? 'bg-blue-100' : ''}`}
                                           onDragOver={(e) => !period.isLunch && handleDragOverSchedule(e, day, periodIndex)}
-                                          onDragLeave={() => !period.isLunch && setDraggedOverCell(null)}
+                                          onDragLeave={handleDragLeave}
                                           onDrop={(e) => !period.isLunch && handleDropSchedule(e, day, periodIndex)}
                                       >
                                           {period.isLunch ? (

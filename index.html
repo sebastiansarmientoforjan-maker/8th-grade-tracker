@@ -1461,11 +1461,14 @@
       const [message, setMessage] = React.useState('');
       
       // Firebase credentials
-      const firebaseConfig = {
-        apiKey: 'AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64',
-        authDomain: '8th-grade-tracker.firebaseapp.com',
-        projectId: '8th-grade-tracker'
-      };
+const firebaseConfig = {
+  apiKey: "AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64",
+  authDomain: "8th-grade-tracker.firebaseapp.com",
+  projectId: "8th-grade-tracker",
+  storageBucket: "8th-grade-tracker.appspot.com",
+  messagingSenderId: "728386315853",
+  appId: "1:728386315853:web:738bc67430ccbae0e69e04"
+};
 
       // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
       const authorizedEmails = [
@@ -1564,5 +1567,6 @@
 
 </body>
 </html>
+
 
 

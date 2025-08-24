@@ -17,136 +17,448 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f3f4f6;
-        }
-        .container {
-            max-width: 1200px;
-            margin: auto;
-            padding: 1.5rem;
         }
     </style>
 </head>
-<body>
-    <div id="root"></div>
+<body class="bg-[#F8F8F8]">
 
-    <script type="text/babel">
-    // Configure Firebase
-    const firebaseConfig = {
-        apiKey: "AIzaSyC...",
-        authDomain: "8th-grade-tracker.firebaseapp.com",
-        projectId: "8th-grade-tracker",
-        storageBucket: "8th-grade-tracker.appspot.com",
-        messagingSenderId: "123456789",
-        appId: "1:123456789012:web:a1b2c3d4e5f6g7h8i9j0"
-    };
-    firebase.initializeApp(firebaseConfig);
-    const db = firebase.firestore();
+<div id="root"></div>
 
-    const authorizedEmails = ["email1@domain.com", "email2@domain.com"]; // Replace with your authorized emails
+<script type="text/babel">
+    'use strict';
+    
+    // Custom message box to replace window.alert()
+    function MessageBox({ message, onClose }) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <p className="text-gray-800 mb-4">{message}</p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      );
+    }
 
-    const App = ({ user, onSignOut }) => {
-      const [activityTemplates, setActivityTemplates] = React.useState([]);
-      const [plannedActivities, setPlannedActivities] = React.useState([]);
-      const [plannerActivities, setPlannerActivities] = React.useState([]);
-      const [message, setMessage] = React.useState('');
-      const [currentWeekStart, setCurrentWeekStart] = React.useState(getStartOfWeek(new Date()));
-      const [selectedWeek, setSelectedWeek] = React.useState(0);
-      const [draggedOverCell, setDraggedOverCell] = React.useState(null);
-      const [view, setView] = React.useState('weekly'); // 'weekly' or 'planner'
+    // Custom confirmation box to replace window.confirm()
+    function ConfirmationBox({ message, onConfirm, onCancel }) {
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <p className="text-gray-800 mb-4">{message}</p>
+            <div className="flex justify-center space-x-4">
+                <button
+                onClick={onCancel}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={onConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    
+    // Main application component
+    function App({ user, onSignOut }) {
+      
+      const authorizedAdmin = 'ssarmiento@craighouse.cl';
+      const isAdministrator = user.email === authorizedAdmin;
 
-      const userUID = user.uid;
-
-      // Add a new state to keep track of the current week number
-      const [currentWeekNumber, setCurrentWeekNumber] = React.useState(() => {
-        // Calculate the week number based on today's date
-        // This is a placeholder, you'll need to implement the exact logic for your academic year.
-        const today = new Date();
-        const startOfYear = new Date(today.getFullYear(), 0, 1);
-        const diff = today - startOfYear;
-        const oneWeek = 1000 * 60 * 60 * 24 * 7;
-        return Math.ceil(diff / oneWeek);
+      const [classDetails, setClassDetails] = React.useState({
+        '8A Planner': { name: '8A Planner', teacher: null, isPlanner: true, type: 'A' },
+        '8A1': { name: '8A1', teacher: null, isPlanner: false, type: 'A' },
+        '8A2': { name: '8A2', teacher: null, isPlanner: false, type: 'A' },
+        '8R Planner': { name: '8R Planner', teacher: null, isPlanner: true, type: 'R' },
+        '8R1': { name: '8R1', teacher: null, isPlanner: false, type: 'R' },
+        '8R2': { name: '8R2', teacher: null, isPlanner: false, type: 'R' },
+        '8R3': { name: '8R3', teacher: null, isPlanner: false, type: 'R' },
+        '8R4': { name: '8R4', teacher: null, isPlanner: false, type: 'R' },
       });
 
-      const plannerRef = db.collection('planner_activities');
-      const plannedRef = db.collection('planned_activities');
+      // Create a new array with the desired order
+      const customOrder = [
+          '8A Planner',
+          '8A1',
+          '8A2',
+          '8R Planner',
+          '8R1',
+          '8R2',
+          '8R3',
+          '8R4',
+      ];
+      
+      // Now use this custom order to create the `classes` array
+      const classes = [...customOrder];
+
+      const classColors = {
+        '8A1': 'bg-[#FF6B6B]',
+        '8A2': 'bg-[#FFB347]',
+        '8R1': 'bg-[#F2D735]',
+        '8R2': 'bg-[#77DD77]',
+        '8R3': 'bg-[#64B5F6]',
+        '8R4': 'bg-[#9575CD]',
+        '8A Planner': 'bg-blue-800',
+        '8R Planner': 'bg-blue-800'
+      };
+      
+      const [currentWeekStart, setCurrentWeekStart] = React.useState(() => {
+        const today = new Date();
+        const dayOfWeek = today.getDay();
+        const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
+        const startOfWeek = new Date(today.setDate(diff));
+        return startOfWeek;
+      });
+      const [scheduledActivities, setScheduledActivities] = React.useState([]);
+      const [plannerActivities, setPlannerActivities] = React.useState([]);
+      const [activityTemplates, setActivityTemplates] = React.useState([]);
+      const [holidays, setHolidays] = React.useState([]);
+      const [fixedSchedules, setFixedSchedules] = React.useState({});
+      const [selectedUnit, setSelectedUnit] = React.useState('All');
+      const [selectedActivity, setSelectedActivity] = React.useState(null);
+      const [selectedHoliday, setSelectedHoliday] = React.useState(null);
+      const [isActivityModalOpen, setIsActivityModalOpen] = React.useState(false);
+      const [isHolidayModalOpen, setIsHolidayModalOpen] = React.useState(false);
+      const [isTeacherModalOpen, setIsTeacherModalOpen] = React.useState(false);
+      const [isScheduleModalOpen, setIsScheduleModalOpen] = React.useState(false);
+      const [isEditScheduleModalOpen, setIsEditScheduleModalOpen] = React.useState(false);
+      const [draggedOverCell, setDraggedOverCell] = React.useState(null);
+      const [message, setMessage] = React.useState('');
+      const [loading, setLoading] = React.useState(true);
+      const [confirmDelete, setConfirmDelete] = React.useState(null);
+      const [error, setError] = React.useState(null); // New error state
+
+      // Firestore connections
+      const db = firebase.firestore();
+      const userUID = user.uid;
       const templatesRef = db.collection('activity_templates');
+      const scheduledRef = db.collection('scheduled_activities');
+      const holidaysRef = db.collection('holidays');
+      const teachersRef = db.collection('teacher_assignments');
+      const plannerRef = db.collection('planner_activities');
+      const fixedSchedulesRef = db.collection('fixed_schedules');
+
+      const getWeekdays = (startDate) => {
+        const weekdays = [];
+        const start = new Date(startDate);
+        for (let i = 0; i < 5; i++) {
+          const day = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+          weekdays.push(day);
+        }
+        return weekdays;
+      };
+    
+      const weekdays = getWeekdays(currentWeekStart);
+
+      // Helper function to parse a YYYY-MM-DD string into a Date object in local time
+      const parseLocalDate = (dateString) => {
+        const [year, month, day] = dateString.split('-').map(Number);
+        return new Date(year, month - 1, day);
+      };
+    
+      // Helper function to format a Date object as a YYYY-MM-DD string in local time
+      const formatLocalDate = (date) => {
+          const year = date.getFullYear();
+          const month = String(date.getMonth() + 1).padStart(2, '0');
+          const day = String(date.getDate()).padStart(2, '0');
+          return `${year}-${month}-${day}`;
+      };
 
       const fetchData = async () => {
         try {
-          const [templatesSnapshot, plannedSnapshot, plannerSnapshot] = await Promise.all([
-            templatesRef.where('userId', '==', userUID).get(),
-            plannedRef.where('userId', '==', userUID).get(),
-            plannerRef.where('userId', '==', userUID).get()
-          ]);
-          setActivityTemplates(templatesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          setPlannedActivities(plannedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          setPlannerActivities(plannerSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            console.log('Fetching all data from Firestore...');
+            const [templatesSnapshot, scheduledSnapshot, holidaysSnapshot, teachersSnapshot, plannerSnapshot, fixedSchedulesSnapshot] = await Promise.all([
+                templatesRef.get(),
+                scheduledRef.get(),
+                holidaysRef.get(),
+                teachersRef.get(),
+                plannerRef.get(),
+                fixedSchedulesRef.get()
+            ]);
+
+            const fetchedTemplates = templatesSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedScheduled = scheduledSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedHolidays = holidaysSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    class: Array.isArray(data.class) ? data.class : [data.class]
+                };
+            });
+            const fetchedTeachers = teachersSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedPlanner = plannerSnapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            }));
+            const fetchedFixedSchedules = fixedSchedulesSnapshot.docs.reduce((acc, doc) => {
+              acc[doc.id] = doc.data();
+              return acc;
+            }, {});
+            
+            // Merge fetched teachers into classDetails state
+            setClassDetails(prevDetails => {
+              const newDetails = { ...prevDetails };
+              fetchedTeachers.forEach(teacher => {
+                if (newDetails[teacher.class]) {
+                  newDetails[teacher.class].teacher = teacher.name;
+                }
+              });
+              return newDetails;
+            });
+            
+            setActivityTemplates(fetchedTemplates);
+            setScheduledActivities(fetchedScheduled);
+            setHolidays(fetchedHolidays);
+            setPlannerActivities(fetchedPlanner);
+            setFixedSchedules(fetchedFixedSchedules);
+            
+            console.log('All state updated.');
         } catch (error) {
-          setMessage(`Error fetching data: ${error.message}`);
+            setMessage(`Error fetching data: ${error.message}`);
+            console.error("Error fetching data:", error);
+            setError(error);
+        } finally {
+            setLoading(false);
+        }
+      };
+      
+      React.useEffect(() => {
+        console.log('useEffect triggered for fetching data.');
+        fetchData();
+      }, []);
+    
+      const handlePreviousWeek = () => {
+        setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() - 7));
+      };
+      const handleNextWeek = () => {
+        setCurrentWeekStart(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + 7));
+      };
+    
+      const openActivityModal = (activity = null, isScheduled = false) => {
+        setSelectedActivity({ ...activity, isScheduled });
+        setIsActivityModalOpen(true);
+      };
+      const closeActivityModal = () => {
+        setIsActivityModalOpen(false);
+        setSelectedActivity(null);
+      };
+
+      const openHolidayModal = (holiday = null) => {
+        setSelectedHoliday(holiday);
+        setIsHolidayModalOpen(true);
+      };
+      const closeHolidayModal = () => {
+        setIsHolidayModalOpen(false);
+        setSelectedHoliday(null);
+      };
+
+      const openTeacherModal = () => {
+        setIsTeacherModalOpen(true);
+      };
+      const closeTeacherModal = () => {
+        setIsTeacherModalOpen(false);
+      };
+
+      const openScheduleModal = () => {
+        setIsScheduleModalOpen(true);
+      };
+
+      const closeScheduleModal = () => {
+        setIsScheduleModalOpen(false);
+      };
+      
+      const openEditScheduleModal = () => {
+        setIsEditScheduleModalOpen(true);
+      };
+      
+      const closeEditScheduleModal = () => {
+        setIsEditScheduleModalOpen(false);
+      };
+    
+      const handleSave = async (activityData, isScheduled) => {
+        try {
+            if (isScheduled) {
+                await scheduledRef.doc(activityData.id).update({
+                    "title": activityData.title,
+                    "description": activityData.description,
+                    "unit": activityData.unit,
+                    "class": activityData.class,
+                    "date": activityData.date,
+                    "templateId": activityData.templateId,
+                    "classType": activityData.classType
+                });
+            } else {
+                if (activityData.id) {
+                    await templatesRef.doc(activityData.id).update({
+                        "title": activityData.title,
+                        "description": activityData.description,
+                        "unit": activityData.unit,
+                        "classType": activityData.classType || 'Standard'
+                    });
+                } else {
+                    await templatesRef.add({
+                        "title": activityData.title,
+                        "description": activityData.description,
+                        "unit": activityData.unit,
+                        "classType": activityData.classType,
+                        "userId": userUID
+                    });
+                }
+            }
+            fetchData();
+        } catch (error) {
+            setMessage(`Error saving activity: ${error.message}`);
+            console.error(error);
+        }
+        closeActivityModal();
+      };
+      
+      const handleSaveHoliday = async (holidayData) => {
+        try {
+            if (holidayData.id) {
+                await holidaysRef.doc(holidayData.id).update({
+                    "name": holidayData.name,
+                    "startDate": holidayData.startDate,
+                    "endDate": holidayData.endDate,
+                    "class": holidayData.class,
+                });
+            } else {
+                await holidaysRef.add({
+                    "name": holidayData.name,
+                    "startDate": holidayData.startDate,
+                    "endDate": holidayData.endDate,
+                    "class": holidayData.class,
+                    "userId": userUID
+                });
+            }
+            fetchData();
+        } catch (error) {
+            setMessage(`Error saving holiday: ${error.message}`);
+            console.error(error);
+        }
+        closeHolidayModal();
+      };
+
+      const handleDeleteHoliday = async (holidayId) => {
+          try {
+            await holidaysRef.doc(holidayId).delete();
+            fetchData();
+          } catch (error) {
+            setMessage(`Error deleting holiday: ${error.message}`);
+            console.error(error);
+          }
+          setConfirmDelete(null);
+          closeHolidayModal();
+      };
+      
+      const handleDeleteScheduled = async (scheduledId) => {
+          try {
+            await scheduledRef.doc(scheduledId).delete();
+            fetchData();
+          } catch (error) {
+            setMessage(`Error deleting scheduled activity: ${error.message}`);
+            console.error(error);
+          }
+          setConfirmDelete(null);
+          closeActivityModal();
+      };
+
+      const handleDeleteTemplate = async (templateId) => {
+          try {
+              const batch = db.batch();
+              const scheduledInstances = await scheduledRef.where('templateId', '==', templateId).get();
+              scheduledInstances.docs.forEach(doc => {
+                  batch.delete(doc.ref);
+              });
+              batch.delete(templatesRef.doc(templateId));
+              await batch.commit();
+              fetchData();
+          } catch (error) {
+              setMessage(`Error deleting template: ${error.message}`);
+              console.error(error);
+          }
+          setConfirmDelete(null);
+          closeActivityModal();
+      };
+
+      const handleSaveTeachers = async (teacherData) => {
+        try {
+          const batch = db.batch();
+          for (const teacher of teacherData) {
+            const docRef = teachersRef.doc(teacher.class);
+            const teacherName = teacher.teacher !== undefined ? teacher.teacher : '';
+            batch.set(docRef, { name: teacherName, class: teacher.class });
+          }
+          await batch.commit();
+          fetchData();
+          closeTeacherModal();
+        } catch (error) {
+          setMessage(`Error saving teachers: ${error.message}`);
           console.error(error);
         }
       };
 
-      React.useEffect(() => {
-        fetchData();
-      }, [userUID]);
-
-      const getStartOfWeek = (date) => {
-        const d = new Date(date);
-        const day = d.getDay();
-        const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Monday start
-        return new Date(d.setDate(diff));
+      const handleSaveSchedule = async (scheduleData) => {
+          try {
+              const batch = db.batch();
+              for (const [classId, schedule] of Object.entries(scheduleData)) {
+                  const docRef = fixedSchedulesRef.doc(classId);
+                  batch.set(docRef, {
+                      schedule: schedule
+                  });
+              }
+              await batch.commit();
+              fetchData();
+              closeEditScheduleModal();
+          } catch (error) {
+              setMessage(`Error saving fixed schedule: ${error.message}`);
+              console.error(error);
+          }
       };
-
-      const formatDate = (date) => {
-        return date.toLocaleDateString('en-US', { day: 'numeric', month: 'short' });
+    
+      const handleDragStart = (e, activity) => {
+        e.dataTransfer.setData("templateId", activity.id);
       };
-
-      const getWeekDates = () => {
-        const dates = [];
-        const start = getStartOfWeek(currentWeekStart);
-        for (let i = 0; i < 7; i++) {
-          const date = new Date(start);
-          date.setDate(start.getDate() + i);
-          dates.push(date);
-        }
-        return dates;
-      };
-
-      const handlePreviousWeek = () => {
-        setCurrentWeekStart(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() - 7));
-        setCurrentWeekNumber(prevWeek => prevWeek - 1);
-      };
-
-      const handleNextWeek = () => {
-        setCurrentWeekStart(prev => new Date(prev.getFullYear(), prev.getMonth(), prev.getDate() + 7));
-        setCurrentWeekNumber(prevWeek => prevWeek + 1);
-      };
-
-      const handleDragStart = (e, templateId) => {
-        e.dataTransfer.setData("templateId", templateId);
-      };
-
-      const handleDragOver = (e, className, periodIndex, date) => {
+    
+      const handleDragOver = (e, className, periodIndex = null, date = null) => {
         e.preventDefault();
         setDraggedOverCell({ className, periodIndex, date });
       };
-
+    
       const handleDragLeave = () => {
         setDraggedOverCell(null);
       };
-
+    
       const handleDrop = async (e, newClass, periodIndexOrDate) => {
         e.preventDefault();
         const templateId = e.dataTransfer.getData("templateId");
         const template = activityTemplates.find(t => t.id === templateId);
-
+        
         const isPlannerRow = classDetails[newClass]?.isPlanner;
 
         if (isPlannerRow) {
             if (template) {
                 try {
-                    // Add the 'week' field
                     await plannerRef.add({
                         "templateId": template.id,
                         "title": template.title,
@@ -155,7 +467,6 @@
                         "classType": template.classType || 'Standard',
                         "periodIndex": periodIndexOrDate,
                         "class": newClass,
-                        "week": currentWeekNumber, // This is the new field
                         "userId": userUID
                     });
                     fetchData();
@@ -165,304 +476,1050 @@
                 }
             }
         } else {
-            const date = new Date(periodIndexOrDate);
+            const formattedDate = periodIndexOrDate;
+            const day = weekdays.find(d => formatLocalDate(d) === formattedDate);
+            
+            const holidayForDay = getHolidayForDay(day, newClass);
+            if (holidayForDay) {
+                setMessage('Cannot schedule an activity on a holiday.');
+                setDraggedOverCell(null);
+                return;
+            }
+
             if (template) {
+                const scheduledData = {
+                  "templateId": template.id,
+                  "title": template.title,
+                  "description": template.description,
+                  "unit": template.unit,
+                  "classType": template.classType || 'Standard',
+                  "date": formattedDate,
+                  "class": newClass,
+                  "userId": userUID
+                };
+                
                 try {
-                    const existingActivity = plannedActivities.find(pa => pa.class === newClass && pa.date && pa.date.toDate().getTime() === date.getTime());
-                    if (existingActivity) {
-                        await plannedRef.doc(existingActivity.id).delete();
-                    }
-                    await plannedRef.add({
-                        "templateId": template.id,
-                        "title": template.title,
-                        "description": template.description,
-                        "unit": template.unit,
-                        "classType": template.classType || 'Standard',
-                        "date": firebase.firestore.Timestamp.fromDate(date),
-                        "class": newClass,
-                        "userId": userUID
-                    });
+                    await scheduledRef.add(scheduledData);
                     fetchData();
                 } catch (error) {
-                    setMessage(`Error adding activity: ${error.message}`);
+                    setMessage(`Error scheduling activity: ${error.message}`);
                     console.error(error);
                 }
             }
         }
         setDraggedOverCell(null);
       };
-
-      const handleDeleteActivity = async (activityId, isPlanner) => {
-        try {
-          if (isPlanner) {
-            await plannerRef.doc(activityId).delete();
-          } else {
-            await plannedRef.doc(activityId).delete();
-          }
-          fetchData();
-        } catch (error) {
-          setMessage(`Error deleting activity: ${error.message}`);
-          console.error(error);
-        }
+      
+      const handleUnscheduledDrop = async (e) => {
+        e.preventDefault();
       };
+    
+      const ActivityModal = () => {
+        const [formData, setFormData] = React.useState(
+          selectedActivity ? {
+            title: selectedActivity.title,
+            class: selectedActivity.class,
+            date: selectedActivity.date,
+            description: selectedActivity.description,
+            unit: selectedActivity.unit,
+            classType: selectedActivity.classType || 'Standard',
+            id: selectedActivity.id
+          } : {
+            title: '',
+            class: null,
+            date: null,
+            description: '',
+            unit: 'Unit 1',
+            classType: 'Standard'
+          }
+        );
+    
+        const handleChange = (e) => {
+          const { name, value } = e.target;
+          setFormData({ ...formData, [name]: value });
+        };
+        
+        const isScheduled = selectedActivity && selectedActivity.isScheduled;
+        const deleteButtonText = isScheduled ? 'Delete Instance' : 'Delete All';
 
-      const getPlannedActivityForDate = (className, date) => {
-        const dayStart = new Date(date.setHours(0, 0, 0, 0));
-        const dayEnd = new Date(date.setHours(23, 59, 59, 999));
-        return plannedActivities.find(
-          pa => pa.class === className && pa.date && pa.date.toDate() >= dayStart && pa.date.toDate() <= dayEnd
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+            <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-800">{isScheduled ? 'Edit Scheduled Activity' : 'Add/Edit Unscheduled Activity'}</h2>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Title</label>
+                  <input
+                    type="text"
+                    name="title"
+                    value={formData.title}
+                    onChange={handleChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Unit</label>
+                  <select
+                    name="unit"
+                    value={formData.unit || ''}
+                    onChange={handleChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="All">All Units</option>
+                    {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Class Type</label>
+                  <select
+                    name="classType"
+                    value={formData.classType || ''}
+                    onChange={handleChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="Advanced">Advanced</option>
+                    <option value="Standard">Standard</option>
+                  </select>
+                </div>
+                {isScheduled && (
+                  <React.Fragment>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Class</label>
+                      <select
+                        name="class"
+                        value={formData.class || ''}
+                        onChange={handleChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      >
+                        <option value="">Unscheduled</option>
+                        {Object.keys(classDetails).filter(c => !classDetails[c].isPlanner).map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">Date</label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={formData.date || ''}
+                        onChange={handleChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </React.Fragment>
+                )}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Description</label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleChange}
+                    rows="3"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  ></textarea>
+                </div>
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                {selectedActivity.id && (
+                  <button
+                    onClick={() => setConfirmDelete(selectedActivity.id)}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                  >
+                    {deleteButtonText}
+                  </button>
+                )}
+                <button
+                  onClick={closeActivityModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSave(formData, isScheduled)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
+            </div>
+          </div>
         );
       };
 
-      const getPlannerActivitiesForPeriod = (className, periodIndex) => {
-        // Add a filter for the week number
-        return plannerActivities.filter(pa => pa.class === className && pa.periodIndex === periodIndex && pa.week === currentWeekNumber);
-      };
+      const HolidayModal = () => {
+        const [formData, setFormData] = React.useState(() => {
+            const defaultClasses = selectedHoliday ? (Array.isArray(selectedHoliday.class) ? selectedHoliday.class : [selectedHoliday.class]) : ['All'];
+            return {
+                name: selectedHoliday ? selectedHoliday.name : '',
+                startDate: selectedHoliday ? selectedHoliday.startDate : '',
+                endDate: selectedHoliday ? selectedHoliday.endDate : '',
+                class: defaultClasses,
+            };
+        });
 
-      const classDetails = {
-        '8A1': { name: '8° A1', color: 'bg-blue-200' },
-        '8A2': { name: '8° A2', color: 'bg-blue-200' },
-        '8A3': { name: '8° A3', color: 'bg-blue-200' },
-        '8A4': { name: '8° A4', color: 'bg-blue-200' },
-        '8B1': { name: '8° B1', color: 'bg-blue-200' },
-        '8B2': { name: '8° B2', color: 'bg-blue-200' },
-        '8B3': { name: '8° B3', color: 'bg-blue-200' },
-        '8B4': { name: '8° B4', color: 'bg-blue-200' },
-        'planner': { name: 'Planner (Ideal Sequence)', color: 'bg-green-200', isPlanner: true }
-      };
+        const handleNameChange = (e) => {
+            setFormData({ ...formData, name: e.target.value });
+        };
+        const handleDateChange = (e) => {
+            const { name, value } = e.target;
+            setFormData({ ...formData, [name]: value });
+        };
 
-      const periodNames = ["1° Period", "2° Period", "3° Period", "4° Period", "5° Period", "6° Period", "7° Period", "8° Period"];
+        const handleClassChange = (e) => {
+            const { value, checked } = e.target;
+            setFormData(prevFormData => {
+                let newClasses = [...prevFormData.class];
+                if (value === 'All') {
+                    if (checked) {
+                        newClasses = ['All'];
+                    } else {
+                        newClasses = [];
+                    }
+                } else {
+                    if (newClasses.includes('All')) {
+                        newClasses = newClasses.filter(c => c !== 'All');
+                    }
+                    if (checked) {
+                        newClasses.push(value);
+                    } else {
+                        newClasses = newClasses.filter(c => c !== value);
+                    }
+                }
+                return { ...prevFormData, class: newClasses };
+            });
+        };
 
-      const renderActivities = () => (
-        <div className="p-4 bg-white rounded-lg shadow-md">
-          <h2 className="text-xl font-bold md:text-2xl text-gray-800 mb-4">Activity Templates</h2>
-          <div className="space-y-4">
-            {activityTemplates.map(template => (
-              <div
-                key={template.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, template.id)}
-                className="bg-gray-100 p-4 rounded-lg shadow-sm cursor-move hover:bg-gray-200 transition"
-              >
-                <h3 className="text-lg font-semibold text-gray-700">{template.title}</h3>
-                <p className="text-sm text-gray-500 mt-1">{template.description}</p>
-                <span className="text-xs text-blue-500 font-medium">{template.unit}</span>
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+              <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+                  <h2 className="text-xl font-bold mb-4 text-gray-800">{selectedHoliday ? 'Edit Holiday/Vacation' : 'Add Holiday/Vacation'}</h2>
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">Name</label>
+                          <input type="text" name="name" value={formData.name} onChange={handleNameChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Applies to Class(es)</label>
+                          <div className="flex flex-wrap gap-2">
+                              {['All', ...Object.keys(classDetails).filter(c => !classDetails[c].isPlanner)].map(c => (
+                                  <label key={c} className="flex items-center space-x-2 text-sm font-medium text-gray-700">
+                                      <input
+                                          type="checkbox"
+                                          value={c}
+                                          checked={formData.class.includes(c)}
+                                          onChange={handleClassChange}
+                                          className="form-checkbox h-4 w-4 text-indigo-600 rounded"
+                                      />
+                                      <span>{c}</span>
+                                  </label>
+                              ))}
+                          </div>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">Start Date</label>
+                          <input type="date" name="startDate" value={formData.startDate} onChange={handleDateChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-gray-700">End Date</label>
+                          <input type="date" name="endDate" value={formData.endDate} onChange={handleDateChange} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" />
+                      </div>
+                  </div>
+                  <div className="mt-6 flex justify-end space-x-3">
+                    {selectedHoliday && (
+                      <button
+                        onClick={() => setConfirmDelete(selectedHoliday.id)}
+                        className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700"
+                      >
+                        Delete
+                      </button>
+                    )}
+                    <button
+                      onClick={closeHolidayModal}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => handleSaveHoliday(formData)}
+                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                    >
+                      Save
+                    </button>
+                  </div>
               </div>
-            ))}
           </div>
-        </div>
-      );
+        );
+      };
 
-      const renderWeeklyView = () => (
-        <div className="overflow-x-auto">
-          <div className="inline-block min-w-full align-middle">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6 w-32">Class</th>
-                    {getWeekDates().map(date => (
-                      <th key={date.toISOString()} scope="col" className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 w-40">
-                        {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                        <br />
-                        <span className="font-normal text-xs">{formatDate(date)}</span>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {Object.keys(classDetails).filter(className => !classDetails[className].isPlanner).map(className => (
-                    <tr key={className}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6 bg-gray-50">
-                        {classDetails[className].name}
-                      </td>
-                      {getWeekDates().map(date => {
-                        const plannedActivity = getPlannedActivityForDate(className, date);
-                        const isDraggedOver = draggedOverCell?.className === className && draggedOverCell?.date && draggedOverCell.date.getTime() === date.getTime();
-                        return (
-                          <td
-                            key={date.toISOString()}
-                            className={`p-1 text-sm text-gray-500 relative ${isDraggedOver ? 'border-2 border-dashed border-blue-500 bg-blue-50' : ''}`}
-                            onDragOver={(e) => handleDragOver(e, className, null, date)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, className, date)}
-                          >
-                            {plannedActivity && (
-                              <div className="relative p-2 rounded-md shadow-sm bg-blue-100 border border-blue-300">
-                                <span className="absolute top-0 right-1 text-xs text-red-500 cursor-pointer hover:text-red-700" onClick={() => handleDeleteActivity(plannedActivity.id, false)}>×</span>
-                                <h4 className="font-semibold text-blue-800 text-xs truncate" title={plannedActivity.title}>{plannedActivity.title}</h4>
-                                <p className="text-xs text-blue-700 truncate" title={plannedActivity.unit}>{plannedActivity.unit}</p>
-                              </div>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      const TeacherModal = () => {
+        const [formData, setFormData] = React.useState(() => {
+          return Object.values(classDetails)
+            .filter(c => !c.isPlanner)
+            .map(c => ({ class: c.name, teacher: c.teacher || '' }));
+        });
+
+        const handleChange = (e, index) => {
+          const { value } = e.target;
+          setFormData(prevData => {
+            const newData = [...prevData];
+            newData[index].teacher = value;
+            return newData;
+          });
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50">
+            <div className="bg-white p-8 rounded-xl shadow-md w-full max-w-md">
+              <h2 className="text-xl font-bold mb-4 text-gray-800">Manage Teachers</h2>
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {formData.map((item, index) => (
+                  <div key={item.class} className="flex items-center space-x-2">
+                    <label className="block text-sm font-medium text-gray-700 w-1/4">{item.class}</label>
+                    <input
+                      type="text"
+                      name="teacher"
+                      value={item.teacher}
+                      onChange={(e) => handleChange(e, index)}
+                      className="mt-1 block w-3/4 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                      placeholder="Enter teacher name"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 flex justify-end space-x-3">
+                <button
+                  onClick={closeTeacherModal}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleSaveTeachers(formData)}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Save
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      );
+        );
+      };
 
-      const renderPlannerView = () => (
-        <div className="overflow-x-auto">
-          <div className="inline-block min-w-full align-middle">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 rounded-lg">
-              <table className="min-w-full divide-y divide-gray-300">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th scope="col" className="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-gray-900 sm:pl-6 w-32">Class</th>
-                    {periodNames.map((period, index) => (
-                      <th key={index} scope="col" className="px-3 py-3.5 text-center text-sm font-semibold text-gray-900 w-40">{period}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 bg-white">
-                  {Object.keys(classDetails).filter(className => classDetails[className].isPlanner).map(className => (
-                    <tr key={className} className={classDetails[className].color}>
-                      <td className="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-gray-900 sm:pl-6 bg-gray-50">
-                        {classDetails[className].name}
-                      </td>
-                      {periodNames.map((period, periodIndex) => {
-                        const plannerActivity = getPlannerActivitiesForPeriod(className, periodIndex)[0];
-                        const isDraggedOver = draggedOverCell?.className === className && draggedOverCell?.periodIndex === periodIndex;
-                        return (
-                          <td
-                            key={periodIndex}
-                            className={`p-1 text-sm text-gray-500 relative ${isDraggedOver ? 'border-2 border-dashed border-blue-500 bg-blue-50' : ''}`}
-                            onDragOver={(e) => handleDragOver(e, className, periodIndex, null)}
-                            onDragLeave={handleDragLeave}
-                            onDrop={(e) => handleDrop(e, className, periodIndex)}
-                          >
-                            {plannerActivity && (
-                              <div className="relative p-2 rounded-md shadow-sm bg-green-100 border border-green-300">
-                                <span className="absolute top-0 right-1 text-xs text-red-500 cursor-pointer hover:text-red-700" onClick={() => handleDeleteActivity(plannerActivity.id, true)}>×</span>
-                                <h4 className="font-semibold text-green-800 text-xs truncate" title={plannerActivity.title}>{plannerActivity.title}</h4>
-                                <p className="text-xs text-green-700 truncate" title={plannerActivity.unit}>{plannerActivity.unit}</p>
-                              </div>
+      // Modal to view the fixed schedule
+      const ScheduleModal = () => {
+        const scheduleDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const classNames = Object.keys(fixedSchedules).filter(c => !classDetails[c]?.isPlanner);
+        
+        const periodData = [
+            { period: 1, time: '8:30 - 9:15', isLunch: false },
+            { period: 2, time: '9:15 - 10:00', isLunch: false },
+            { period: 3, time: '10:25 - 11:10', isLunch: false },
+            { period: 4, time: '11:10 - 11:50', isLunch: false },
+            { period: 5, time: '12:00 - 12:40', isLunch: false },
+            { period: 6, time: '12:40 - 13:25', isLunch: true, activity: 'Lunch' },
+            { period: 7, time: '13:25 - 14:10', isLunch: false },
+            { period: 8, time: '14:10 - 14:50', isLunch: false },
+            { period: 9, time: '15:05 - 15:45', isLunch: false },
+            { period: 10, time: '15:45 - 16:25', isLunch: false },
+        ];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 p-4">
+            <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-5xl overflow-auto max-h-[90vh]">
+              <h2 className="text-xl font-bold mb-4 text-gray-800 text-center">Fixed Class Schedule</h2>
+              <div className="grid grid-cols-[100px_80px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
+                {/* Header row */}
+                <div className="col-span-1"></div>
+                <div className="col-span-1"></div>
+                {scheduleDays.map(day => (
+                  <div key={day} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md p-2 border-b border-gray-300">{day}</div>
+                ))}
+
+                {/* Schedule rows */}
+                {classNames.map(className => (
+                  <React.Fragment key={className}>
+                    <div className="p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex items-center justify-center text-center border-r border-gray-300 row-span-10">
+                      {className}
+                    </div>
+                    {periodData.map((period, periodIndex) => (
+                      <React.Fragment key={`${className}-${period.period}`}>
+                        <div className="p-1 font-semibold text-gray-600 bg-gray-100 rounded-md text-center">
+                          <div className="text-sm font-bold">{period.period}</div>
+                          <div className="text-xs">{period.time}</div>
+                        </div>
+                        {scheduleDays.map(day => (
+                          <div key={`${className}-${day}-${period.period}`} className="p-2 min-h-[40px] rounded-md shadow-sm border border-gray-200 bg-white space-y-1">
+                            {period.isLunch ? (
+                              <div className="p-1 text-sm font-semibold text-gray-800 text-center bg-gray-300 rounded-md">Lunch</div>
+                            ) : (
+                                fixedSchedules[className]?.schedule?.[day]?.[periodIndex]?.activity
                             )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                          </div>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={closeScheduleModal}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                >
+                  Close
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      );
+        );
+      };
+
+      // Admin-only modal to edit the fixed schedule
+      const EditScheduleModal = () => {
+        const scheduleDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const classNames = Object.keys(classDetails).filter(c => !classDetails[c]?.isPlanner);
+        const droppableClasses = ['8A1', '8A2', '8R1', '8R2', '8R3', '8R4'];
+        
+        const periodData = [
+            { period: 1, time: '8:30 - 9:15', isLunch: false },
+            { period: 2, time: '9:15 - 10:00', isLunch: false },
+            { period: 3, time: '10:25 - 11:10', isLunch: false },
+            { period: 4, time: '11:10 - 11:50', isLunch: false },
+            { period: 5, time: '12:00 - 12:40', isLunch: false },
+            { period: 6, time: '12:40 - 13:25', isLunch: true, activity: 'Lunch' },
+            { period: 7, time: '13:25 - 14:10', isLunch: false },
+            { period: 8, time: '14:10 - 14:50', isLunch: false },
+            { period: 9, time: '15:05 - 15:45', isLunch: false },
+            { period: 10, time: '15:45 - 16:25', isLunch: false },
+        ];
+        
+        const [formData, setFormData] = React.useState(() => {
+          const initialData = {};
+          classNames.forEach(className => {
+            initialData[className] = {
+              schedule: {
+                ...fixedSchedules[className]?.schedule,
+                ...scheduleDays.reduce((acc, day) => {
+                  if (!fixedSchedules[className]?.schedule?.[day]) {
+                    acc[day] = periodData.map(p => ({ period: p.period, activity: p.isLunch ? 'Lunch' : '' }));
+                  }
+                  return acc;
+                }, {})
+              }
+            };
+          });
+          return initialData;
+        });
+        
+        const handleDragStartSchedule = (e, className) => {
+            e.dataTransfer.setData("className", className);
+        };
+
+        const handleDragOverSchedule = (e, day, periodIndex) => {
+            e.preventDefault();
+            setDraggedOverCell({ day, periodIndex });
+        };
+        
+        const handleDropSchedule = (e, day, periodIndex) => {
+            e.preventDefault();
+            const droppedClassName = e.dataTransfer.getData("className");
+            
+            // Check if this period is already filled with a class
+            const existingClass = classNames.find(c => formData[c].schedule[day][periodIndex].activity);
+            if (existingClass && existingClass !== droppedClassName) {
+              setMessage(`This period is already assigned to ${existingClass}.`);
+              setDraggedOverCell(null);
+              return;
+            }
+
+            // Count current number of periods for the dropped class
+            let count = 0;
+            classNames.forEach(c => {
+              scheduleDays.forEach(d => {
+                periodData.forEach((p, pIndex) => {
+                  if (formData[c].schedule[d][pIndex].activity === droppedClassName) {
+                    count++;
+                  }
+                });
+              });
+            });
+
+            if (count >= 6) {
+                setMessage(`Cannot add ${droppedClassName}. Maximum of 6 periods per week per class.`);
+                return;
+            }
+            
+            setFormData(prevData => {
+                const newData = { ...prevData };
+                
+                // Clear the previous instance of the dropped class
+                classNames.forEach(c => {
+                  scheduleDays.forEach(d => {
+                    periodData.forEach((p, pIndex) => {
+                      if (newData[c].schedule[d][pIndex].activity === droppedClassName) {
+                        newData[c].schedule[d][pIndex].activity = '';
+                      }
+                    });
+                  });
+                });
+                
+                // Set the new instance
+                const newSchedule = [...newData[classNames[0]].schedule[day]]; // Use a placeholder to get correct dimensions
+                
+                // Loop through all classes and set the new activity
+                classNames.forEach(c => {
+                  const newSchedule = [...newData[c].schedule[day]];
+                  newSchedule[periodIndex].activity = '';
+                  if (c === droppedClassName) {
+                    newSchedule[periodIndex].activity = droppedClassName;
+                  }
+                  newData[c].schedule[day] = newSchedule;
+                });
+                
+                return newData;
+            });
+            setDraggedOverCell(null);
+        };
+
+        
+        const handleRemoveSchedule = (className, day, periodIndex) => {
+             setFormData(prevData => {
+                const newData = { ...prevData };
+                const newSchedule = [...newData[className].schedule[day]];
+                newSchedule[periodIndex].activity = '';
+                newData[className].schedule[day] = newSchedule;
+                return newData;
+            });
+        };
+        
+        const isDraggedOver = (day, periodIndex) => {
+            return draggedOverCell?.day === day && draggedOverCell?.periodIndex === periodIndex;
+        };
+
+        // Helper function to find which class is in a specific period/day
+        const findClassForPeriod = (day, periodIndex) => {
+            for (const className of classNames) {
+                if (formData[className]?.schedule?.[day]?.[periodIndex]?.activity) {
+                    return formData[className].schedule[day][periodIndex].activity;
+                }
+            }
+            return null;
+        };
+
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-50 p-4">
+            <div className="bg-white p-6 rounded-xl shadow-md w-full max-w-7xl overflow-auto max-h-[90vh] flex">
+              
+              {/* Left Panel: Droppable Classes */}
+              <div className="w-1/4 p-4 bg-gray-100 rounded-xl shadow-inner mr-4">
+                  <h3 className="text-lg font-bold mb-4 text-center text-white bg-gray-800 rounded-md p-2 -m-2 mb-2">Drag and Drop Classes</h3>
+                  <div className="space-y-2">
+                    {droppableClasses.map(c => {
+                        const count = scheduleDays.reduce((acc, day) => {
+                          const periods = formData[c]?.schedule?.[day] || [];
+                          return acc + periods.filter(p => p.activity === c).length;
+                        }, 0);
+                        return (
+                          <div
+                            key={c}
+                            className={`relative p-2 text-sm text-center text-white cursor-grab rounded-md shadow-md ${classColors[c]}`}
+                            draggable
+                            onDragStart={(e) => handleDragStartSchedule(e, c)}
+                          >
+                            {c} <span className="text-xs font-bold text-white/50">{count}/6</span>
+                          </div>
+                        );
+                    })}
+                  </div>
+              </div>
+              
+              {/* Right Panel: The Schedule Table */}
+              <div className="flex-1 overflow-auto">
+                  <h2 className="text-xl font-bold mb-4 text-gray-800 text-center">Edit Fixed Class Schedule</h2>
+                  <div className="grid grid-cols-[150px_repeat(5,_minmax(0,_1fr))] gap-1 text-xs md:text-sm border-collapse">
+                      {/* Header row */}
+                      <div className="col-span-1"></div>
+                      {scheduleDays.map(day => (
+                          <div key={day} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md p-2 border-b border-gray-300">{day}</div>
+                      ))}
+                      
+                      {/* Period Rows */}
+                      {periodData.map((period, periodIndex) => (
+                          <React.Fragment key={period.period}>
+                              <div className="p-1 font-semibold text-gray-600 bg-gray-100 rounded-md text-center">
+                                  <div className="text-sm font-bold">{period.period}</div>
+                                  <div className="text-xs">{period.time}</div>
+                              </div>
+                              {scheduleDays.map(day => {
+                                  const assignedClass = findClassForPeriod(day, periodIndex);
+                                  return (
+                                      <div
+                                          key={`${day}-${period.period}`}
+                                          className={`p-1 min-h-[40px] rounded-md shadow-sm border border-gray-200 transition-colors duration-200 ${
+                                              period.isLunch ? 'bg-gray-300' : 'bg-white'
+                                          } ${isDraggedOver(day, periodIndex) ? 'bg-blue-100' : ''}`}
+                                          onDragOver={(e) => !period.isLunch && handleDragOverSchedule(e, day, periodIndex)}
+                                          onDragLeave={handleDragLeave}
+                                          onDrop={(e) => !period.isLunch && handleDropSchedule(e, day, periodIndex)}
+                                      >
+                                          {period.isLunch ? (
+                                              <div className="p-1 text-sm font-semibold text-gray-800 text-center">Lunch</div>
+                                          ) : (
+                                              assignedClass && (
+                                                  <div
+                                                      onClick={() => handleRemoveSchedule(assignedClass, day, periodIndex)}
+                                                      className={`p-1 text-sm text-center text-white rounded-md shadow-sm cursor-pointer ${classColors[assignedClass] || 'bg-transparent'}`}
+                                                  >
+                                                      {assignedClass}
+                                                  </div>
+                                              )
+                                          )}
+                                      </div>
+                                  );
+                              })}
+                          </React.Fragment>
+                      ))}
+                  </div>
+                  <div className="mt-6 flex justify-end space-x-3">
+                      <button
+                          onClick={closeEditScheduleModal}
+                          className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                      >
+                          Cancel
+                      </button>
+                      <button
+                          onClick={() => handleSaveSchedule(formData)}
+                          className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
+                      >
+                          Save Schedule
+                      </button>
+                  </div>
+              </div>
+            </div>
+          </div>
+        );
+      };
+      
+      if (error) {
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100 p-4 text-center">
+            <div className="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+              <h2 className="text-2xl font-bold mb-2 text-red-600">Application Error</h2>
+              <p className="text-gray-600 mb-4">Something went wrong. Please refresh the page.</p>
+              <pre className="bg-gray-100 p-4 rounded-md text-sm text-left overflow-x-auto whitespace-pre-wrap">{error.message}</pre>
+            </div>
+          </div>
+        );
+      }
+    
+      if (loading) {
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-100">
+            <div className="text-center">
+              <h2 className="text-2xl font-bold mb-2">Cargando actividades...</h2>
+              <p className="text-gray-600">Conectando a Firebase.</p>
+            </div>
+          </div>
+        );
+      }
+      
+      const getHolidayForDay = (day, className) => {
+        const dayDate = day.toISOString().split('T')[0];
+        const foundHoliday = holidays.find(h => {
+          return dayDate >= h.startDate && dayDate <= h.endDate && (h.class.includes('All') || h.class.includes(className));
+        });
+        return foundHoliday || null;
+      };
+      
+      const getPlannerActivitiesForPeriod = (className, periodIndex) => {
+        return plannerActivities.filter(pa => pa.class === className && pa.periodIndex === periodIndex);
+      };
+      
+      const handlePlannerActivityDelete = async (plannerId) => {
+        try {
+          await plannerRef.doc(plannerId).delete();
+          fetchData();
+        } catch (error) {
+          setMessage(`Error deleting planned activity: ${error.message}`);
+          console.error(error);
+        }
+      };
+      
+      const plannerPeriods = [
+        { period: 1, time: '8:30 - 9:15' },
+        { period: 2, time: '9:15 - 10:00' },
+        { period: 3, time: '10:25 - 11:10' },
+        { period: 4, time: '11:10 - 11:50' },
+        { period: 5, time: '12:00 - 12:40' },
+        { period: 6, time: '12:40 - 13:25' }
+      ];
 
       return (
-        <div className="container">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-900">8th Grade Tracker</h1>
-            <button
-              onClick={onSignOut}
-              className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition"
-            >
-              Sign Out
-            </button>
-          </div>
-
-          <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <button
-                onClick={handlePreviousWeek}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition"
-              >
-                Previous
-              </button>
-              <h2 className="text-xl font-bold md:text-2xl text-center text-gray-600">
-                Weekly Planner (Ideal Sequence) - Week {currentWeekNumber}
-              </h2>
-              <button
-                onClick={handleNextWeek}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition"
-              >
-                Next
-              </button>
+        <div className="font-sans antialiased text-gray-800 bg-[#F8F8F8] min-h-screen p-4 flex flex-col">
+          {/* Main Header (Title and User Actions) */}
+          <div className="flex justify-between items-start mb-4">
+            <div className="flex-1 text-center">
+              <h1 className="text-3xl font-bold text-gray-800">8th Grade Tracker</h1>
             </div>
-            {renderPlannerView()}
-          </div>
-          
-          <div className="bg-white p-4 rounded-lg shadow-md mb-6">
-            <div className="flex justify-between items-center mb-4">
-              <button
-                onClick={handlePreviousWeek}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition"
-              >
-                Previous Week
-              </button>
-              <h2 className="text-xl font-bold md:text-2xl text-center text-gray-600">
-                Week of {formatDate(currentWeekStart)} - {formatDate(new Date(currentWeekStart.getFullYear(), currentWeekStart.getMonth(), currentWeekStart.getDate() + 6))}
-              </h2>
-              <button
-                onClick={handleNextWeek}
-                className="px-3 py-1 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition"
-              >
-                Next Week
-              </button>
+            <div className="flex flex-col items-end space-y-2">
+                <div className="flex items-center space-x-4">
+                    <span className="text-sm font-medium text-gray-600">{user.email}</span>
+                    <button
+                      onClick={onSignOut}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+                    >
+                      Sign Out
+                    </button>
+                </div>
+                <div className="flex space-x-2">
+                  <button
+                      onClick={() => openScheduleModal()}
+                      className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                  >
+                      View Fixed Schedule
+                  </button>
+                  {isAdministrator && (
+                    <React.Fragment>
+                      <button
+                          onClick={() => openEditScheduleModal()}
+                          className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700"
+                      >
+                          Manage Fixed Schedule
+                      </button>
+                      <button
+                          onClick={() => openTeacherModal()}
+                          className="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+                      >
+                          Manage Teachers
+                      </button>
+                      <button
+                          onClick={() => openHolidayModal()}
+                          className="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+                      >
+                          Manage Holidays
+                      </button>
+                    </React.Fragment>
+                  )}
+                </div>
             </div>
-            {renderWeeklyView()}
           </div>
+          <div className="flex-1 bg-white rounded-xl shadow-md p-4 lg:p-6 overflow-x-auto">
+            {/* Main Content Area */}
+            <div className="flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4">
+              {/* Unscheduled Activities List */}
+              <div
+                className="w-full lg:w-1/4 p-4 bg-gray-100 rounded-xl shadow-inner min-h-[200px]"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={handleUnscheduledDrop}
+              >
+                <h3 className="text-lg font-bold mb-2 text-center text-white bg-gray-800 rounded-md p-2 -m-2 mb-2">Unscheduled Activities</h3>
+                <div className="text-center">
+                  <button onClick={() => openActivityModal()} className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 mb-4">
+                    Add Activity
+                  </button>
+                </div>
+                {/* Unit filter dropdown */}
+                <div className="mb-4">
+                  <label htmlFor="unit-filter" className="sr-only">Filter by Unit</label>
+                  <select
+                    id="unit-filter"
+                    value={selectedUnit}
+                    onChange={(e) => setSelectedUnit(e.target.value)}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  >
+                    <option value="All">All Units</option>
+                    {['Unit 1', 'Unit 2', 'Unit 3', 'Unit 4'].map(u => (
+                      <option key={u} value={u}>{u}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  {activityTemplates
+                    .filter(template => selectedUnit === 'All' || template.unit === selectedUnit)
+                    .map(template => (
+                      <div
+                        key={template.id}
+                        className={`p-2 text-sm text-gray-800 cursor-pointer bg-white rounded-md shadow-sm hover:shadow-md border border-gray-200`}
+                        onClick={() => openActivityModal(template)}
+                        draggable
+                        onDragStart={(e) => handleDragStart(e, template)}
+                      >
+                        {template.title}
+                      </div>
+                    ))}
+                </div>
+              </div>
+    
+              {/* Weekly Calendar Grid - Columnar View */}
+              <div className="flex-1 overflow-x-auto">
+                {/* Planner Section */}
+                <h2 className="text-xl font-bold md:text-2xl text-center text-gray-600 mb-2">Weekly Planner (Ideal Sequence)</h2>
+                <div className="grid grid-cols-[150px_repeat(6,_minmax(0,_1fr))] gap-1 min-w-[768px] mb-8">
+                  <div className="col-span-1"></div>
+                  {plannerPeriods.map((p, index) => (
+                      <div key={index} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md shadow-sm p-2 border-b border-gray-300">
+                          <div className="text-sm">Period {p.period}</div>
+                          <div className="text-xs font-normal">{p.time}</div>
+                      </div>
+                  ))}
+                  {classes.filter(c => classDetails[c]?.isPlanner).map(c => {
+                    const classInfo = classDetails[c];
+                    return (
+                      <React.Fragment key={c}>
+                        <div className={`p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex flex-col items-center justify-center text-center border-r border-gray-300`}>
+                          {classInfo.name}
+                        </div>
+                        {plannerPeriods.map((period, periodIndex) => {
+                            const plannerActivitiesForPeriod = getPlannerActivitiesForPeriod(c, periodIndex);
+                            const isDraggedOver = draggedOverCell?.className === c && draggedOverCell?.periodIndex === periodIndex;
+                            const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'}`;
+                            return (
+                                <div
+                                    key={`${c}-${periodIndex}`}
+                                    className={cellClasses}
+                                    onDragOver={(e) => handleDragOver(e, c, periodIndex)}
+                                    onDragLeave={handleDragLeave}
+                                    onDrop={(e) => handleDrop(e, c, periodIndex)}
+                                >
+                                    <div className="space-y-1">
+                                      {plannerActivitiesForPeriod.map((activity) => {
+                                          let unitPrefix = '';
+                                          if (activity.unit) {
+                                              const unitNumber = activity.unit.split(' ')[1];
+                                              unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+                                          }
+                                          const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
+                                          return (
+                                            <div 
+                                              key={activity.id}
+                                              className={`group relative p-1 text-xs text-white rounded-md shadow-sm ${classColors[c]}`}
+                                            >
+                                              {classTypePrefix}{unitPrefix}{activity.title}
+                                              {isAdministrator && (
+                                                <button
+                                                  onClick={(e) => { e.stopPropagation(); handlePlannerActivityDelete(activity.id); }}
+                                                  className="absolute top-0 right-0 p-1 text-white bg-red-500 rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                                >
+                                                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                                                </button>
+                                              )}
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
 
-          {renderActivities()}
+                {/* Main Calendar Header with Navigation */}
+                <h2 className="text-xl font-bold md:text-2xl text-center mr-4 text-gray-600">{currentWeekStart.toLocaleString('default', { month: 'long', year: 'numeric' })}</h2>
+                <div className="flex justify-center items-center mb-4">
+                    <div className="flex space-x-2">
+                      <button onClick={handlePreviousWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" /></svg>
+                      </button>
+                      <button onClick={() => setCurrentWeekStart(new Date(new Date().setDate(new Date().getDate() - new Date().getDay() + (new Date().getDay() === 0 ? -6 : 1))))} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 100 20 10 10 0 000-20zm0 18a8 8 0 110-16 8 8 0 010 16zm-1-8h2v-4h-2v4zm1-6a1 1 0 100 2 1 1 0 000-2z" /></svg>
+                      </button>
+                      <button onClick={handleNextWeek} className="p-2 text-gray-600 rounded-md shadow-sm hover:bg-gray-200">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" /></svg>
+                      </button>
+                    </div>
+                </div>
+                <div className="grid grid-cols-6 gap-1 min-w-[768px] border-collapse">
+                  {/* Corner spacer */}
+                  <div className="col-span-1"></div>
+                  {/* Weekday Headers */}
+                  {weekdays.map(day => (
+                    <div key={day.toString()} className="text-center font-bold text-gray-600 bg-gray-100 rounded-md shadow-sm p-2 border-b border-gray-300">
+                      <div className="text-sm">{day.toLocaleString('default', { weekday: 'short' })}</div>
+                      <div className="text-xl">{day.getDate()}</div>
+                    </div>
+                  ))}
+    
+                  {/* Class Rows */}
+                  {classes.filter(c => !classDetails[c].isPlanner).map(c => {
+                    const classInfo = classDetails[c];
+                    return (
+                      <React.Fragment key={c}>
+                        {/* Class row header */}
+                        <div className={`p-2 font-semibold text-gray-800 bg-gray-200 rounded-md shadow-sm flex flex-col items-center justify-center text-center border-r border-gray-300`}>
+                          {classInfo.name}
+                          {classInfo.teacher && <span className="text-xs font-normal text-gray-500 mt-1">{classInfo.teacher}</span>}
+                        </div>
+                        {/* Daily cells for each class */}
+                        {weekdays.map(day => {
+                          const formattedDate = formatLocalDate(day);
+                          const isDraggedOver = draggedOverCell?.className === c && draggedOverCell?.date === formattedDate;
+                          const cellClasses = `p-1 min-h-[80px] rounded-md shadow-sm transition-colors duration-200 border border-gray-200 ${isDraggedOver ? 'bg-blue-100' : 'bg-white'}`;
+                          
+                          const dayActivities = scheduledActivities.filter(act => {
+                            const activityDate = parseLocalDate(act.date);
+                            return activityDate.getFullYear() === day.getFullYear() && 
+                                   activityDate.getMonth() === day.getMonth() && 
+                                   activityDate.getDate() === day.getDate() && 
+                                   act.class === c;
+                          });
+                          const holiday = getHolidayForDay(day, c);
+                          const holidayCellClasses = holiday ? 'bg-purple-100 cursor-pointer' : '';
+
+                          return (
+                            <div
+                              key={`${c}-${formattedDate}`}
+                              className={`${cellClasses} ${holidayCellClasses}`}
+                              onDragOver={(e) => handleDragOver(e, c, null, formattedDate)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, c, formattedDate)}
+                              onClick={() => { if (holiday && isAdministrator) openHolidayModal(holiday); }}
+                            >
+                              <div className="space-y-1">
+                                {holiday ? (
+                                  <div className="p-1 text-sm font-semibold text-purple-800 text-center">{holiday.name}</div>
+                                ) : (
+                                  dayActivities.map(activity => {
+                                    let unitPrefix = '';
+                                    if (activity.unit) {
+                                        const unitNumber = activity.unit.split(' ')[1];
+                                        unitPrefix = unitNumber ? `U${unitNumber} - ` : '';
+                                    }
+                                    const classTypePrefix = activity.classType === 'Advanced' ? '(A) ' : activity.classType === 'Standard' ? '(S) ' : '';
+                                    return (
+                                    <div
+                                      key={activity.id}
+                                      className={`p-1 text-xs text-white rounded-md shadow-sm cursor-pointer hover:shadow-lg transition-shadow duration-200 ${classColors[activity.class]}`}
+                                      onClick={(e) => { e.stopPropagation(); openActivityModal(activity, true); }}
+                                    >
+                                      {classTypePrefix}{unitPrefix}{activity.title}
+                                    </div>
+                                  )})
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+          {isActivityModalOpen && <ActivityModal />}
+          {isHolidayModalOpen && <HolidayModal />}
+          {isTeacherModalOpen && <TeacherModal />}
+          {isScheduleModalOpen && <ScheduleModal />}
+          {isEditScheduleModalOpen && <EditScheduleModal />}
           {message && <MessageBox message={message} onClose={() => setMessage('')} />}
+          {confirmDelete && selectedActivity && (selectedActivity.isScheduled ? (
+              <ConfirmationBox
+                message="Are you sure you want to delete this scheduled activity?"
+                onConfirm={() => handleDeleteScheduled(confirmDelete)}
+                onCancel={() => setConfirmDelete(null)}
+              />
+          ) : (
+              <ConfirmationBox
+                message="Are you sure you want to permanently delete this template and all its scheduled copies?"
+                onConfirm={() => handleDeleteTemplate(confirmDelete)}
+                onCancel={() => setConfirmDelete(null)}
+              />
+          ))}
+          {confirmDelete && selectedHoliday && <ConfirmationBox
+              message="Are you sure you want to delete this holiday?"
+              onConfirm={() => handleDeleteHoliday(confirmDelete)}
+              onCancel={() => setConfirmDelete(null)}
+          />}
         </div>
       );
     }
-
-    const LoginScreen = ({ onSignIn }) => (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="bg-white p-8 rounded-lg shadow-md text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">8th Grade Tracker</h1>
-          <p className="text-gray-600 mb-6">Sign in with your Google account to continue.</p>
-          <button
-            onClick={onSignIn}
-            className="flex items-center justify-center px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.343c-1.614,4.873-6.175,8.55-11.343,8.55c-6.69,0-12.128-5.438-12.128-12.127 c0-6.689,5.438-12.128,12.128-12.128c3.153,0,6.074,1.246,8.274,3.26l5.992-5.992C34.025,2.029,29.179,0,24,0 C12.955,0,3.585,8.563,3.585,19.083c0,10.52,9.37,19.083,20.415,19.083c9.93,0,18.029-7.399,18.029-19.083L43.611,20.083z"/><path fill="#FF3D00" d="M6.306,10.982l6.096,5.65c2.146-2.502,5.266-4.084,8.698-4.084 c3.216,0,6.13,1.155,8.443,3.047l5.99-5.99C33.911,2.029,29.065,0,24,0C16.928,0,10.604,2.943,6.306,10.982z"/><path fill="#4CAF50" d="M24,45c6.54,0,12.02-2.909,15.77-7.854l-5.99-5.99c-2.455,1.751-5.64,2.844-9.78,2.844 c-6.69,0-12.127-5.438-12.127-12.128h-6.097C3.585,34.062,12.955,45,24,45z"/><path fill="#1565C0" d="M43.611,20.083H42V20h-1.614v0.083C40.386,26.494,35.158,31.722,29,32.744 v-6.498C32.124,25.435,34.582,22.849,35.803,20.083H43.611z"/></svg>
-            Sign in with Google
-          </button>
+    
+    // Login screen component
+    function LoginScreen({ onSignIn, onMessageBox }) {
+      return (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-gray-900 bg-opacity-90 p-4">
+          <div className="bg-white p-8 rounded-xl shadow-lg w-full max-w-sm text-center">
+            <h2 className="text-2xl font-bold mb-4 text-gray-800">Welcome to the 8th Grade Tracker</h2>
+            <p className="text-gray-600 mb-6">Please sign in with your Google account to access your calendar.</p>
+            <button
+              onClick={onSignIn}
+              className="px-6 py-3 font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md"
+            >
+              Sign In with Google
+            </button>
+          </div>
         </div>
-      </div>
-    );
-
-    const MessageBox = ({ message, onClose }) => (
-      <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center p-4">
-        <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
-          <p className="text-gray-800 mb-4">{message}</p>
-          <button
-            onClick={onClose}
-            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-    );
-
+      );
+    }
+    
+    // Main wrapper component to handle authentication state
     function AppWrapper() {
       const [user, setUser] = React.useState(null);
+      const [loading, setLoading] = React.useState(true);
       const [message, setMessage] = React.useState('');
+      
+     // Firebase credentials (from Firebase Console)
+const firebaseConfig = {
+  apiKey: "AIzaSyCaHoev9SS07-M5EoKE-E3xVxfHCS2Qz64",
+  authDomain: "th-grade-tracker.firebaseapp.com",
+  projectId: "th-grade-tracker",
+  storageBucket: "th-grade-tracker.firebasestorage.app",
+  messagingSenderId: "728386315853",
+  appId: "1:728386315853:web:738bc67430ccbae0e69e04",
+  measurementId: "G-DCC5HDDH6J"
+};
+
+
+      // ✨ Lista de correos electrónicos autorizados para acceder a la aplicación ✨
+      const authorizedEmails = [
+        'ssarmiento@craighouse.cl',
+        'fmorales@craighouse.cl',
+        'dmunoz@craighouse.cl',
+        'imoren@craighouse.cl',
+        'thernandez@craighouse.cl'
+      ].map(email => email.toLowerCase().trim());
 
       React.useEffect(() => {
-        const unsubscribe = firebase.auth().onAuthStateChanged(user => {
+        if (!firebaseConfig.apiKey) {
+          setMessage('Error de configuración: La clave de API de Firebase está vacía.');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+          }
+        } catch (e) {
+          console.error("Error al inicializar Firebase:", e);
+          setMessage(`Error al inicializar Firebase: ${e.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const auth = firebase.auth();
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+          setLoading(false);
           if (user) {
             const userEmail = user.email.toLowerCase().trim();
+            console.log("Correo electrónico recibido de Firebase:", userEmail);
+            console.log("Correos electrónicos autorizados:", authorizedEmails);
+
             if (authorizedEmails.includes(userEmail)) {
               setUser(user);
+              console.log("Usuario autorizado. Acceso concedido.");
             } else {
-              setMessage('Access denied. Your email is not authorized to use this application.');
-              firebase.auth().signOut();
+              setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
+              auth.signOut();
+              console.log("Usuario no autorizado. Acceso denegado y se cierra la sesión.");
             }
           } else {
             setUser(null);
           }
         });
+
         return () => unsubscribe();
       }, []);
 
@@ -474,13 +1531,13 @@
           
           if (authorizedEmails.includes(userEmail)) {
             setUser(result.user);
-            console.log("Login successful. User state has been updated directly.");
+            console.log("Login exitoso. El estado del usuario se ha actualizado directamente.");
           } else {
-            setMessage('Access denied. Your email is not authorized to use this application.');
+            setMessage('Acceso denegado. Tu correo electrónico no está autorizado para usar esta aplicación.');
             firebase.auth().signOut();
           }
         } catch (error) {
-          setMessage(`Error during sign-in: ${error.message}`);
+          setMessage(`Error durante el inicio de sesión: ${error.message}`);
           console.error(error);
         }
       };
@@ -489,7 +1546,7 @@
         try {
           await firebase.auth().signOut();
         } catch (error) {
-          setMessage(`Error during sign-out: ${error.message}`);
+          setMessage(`Error durante el cierre de sesión: ${error.message}`);
           console.error(error);
         }
       };
@@ -508,6 +1565,11 @@
 
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(<AppWrapper />);
-    </script>
+</script>
+
 </body>
 </html>
+
+
+
+
